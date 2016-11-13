@@ -1,5 +1,9 @@
+"""
+This creates classes around the Session interface of
+the DRMAA2 library using the interface module to
+provide access to the native library.
+"""
 import logging
-from pathlib import Path
 from ctypes import cast
 from .interface import *
 
@@ -8,10 +12,22 @@ LOGGER = logging.getLogger("drmaa2.session")
 DRMAA_LIB = load_drmaa_library()
 
 
+def drms_version():
+    LOGGER.debug("enter drms_version")
+    version_ptr = DRMAA_LIB.drmaa2_get_drms_version()
+    version = version_ptr.contents
+    value = (version.major.value.decode(), version.minor.value.decode())
+    DRMAA_LIB.drmaa2_version_free(pointer(version_ptr))
+    LOGGER.debug("leave drms_version")
+    return value
+
+
 class DRMAA2Exception(Exception):
+    """Base class so a user can catch all DRMAA2 exceptions."""
     pass
 
 
+# These exceptions are defined by the IDL Spec.
 class DeniedByDrms(DRMAA2Exception):
     """The DRM system rejected the operation due to security issues."""
 
@@ -69,6 +85,7 @@ class ImplementationSpecific(DRMAA2Exception):
 
 
 def CheckError(errval):
+    """Quick check of return values that throws a DRMAA2Exception."""
     errs = {
         1: DeniedByDrms,
         2: DrmCommunication,
@@ -91,6 +108,8 @@ def CheckError(errval):
 
 
 class JobTemplate:
+    """A JobTemplate is both how to specify a job and how to search for jobs.
+    """
     def __init__(self):
         self.remoteCommand = None
         self.args = None
@@ -143,7 +162,8 @@ class JobTemplate:
 class JobSession:
     def __init__(self, name, contact=None):
         """The IDL description says this should have a contact name,
-        but it isn't supported."""
+        but it isn't supported. UGE always makes the contact your
+        user name."""
         assert isinstance(name, str)
         LOGGER.debug("Creating JobSession {}".format(name))
         if contact:
@@ -161,6 +181,8 @@ class JobSession:
 
     @classmethod
     def from_existing(cls, name):
+        """If user tangkend made JobSession crunch, then
+        the job would be listed here as tangkend@crunch."""
         session = DRMAA_LIB.drmaa2_open_jsession(name.encode())
         if not session:
             raise RuntimeError(

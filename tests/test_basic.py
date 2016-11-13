@@ -4,6 +4,7 @@ import sys
 import drmaa2
 
 def test_manager():
+    logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
     assert drmaa2.drmsName
     assert len(drmaa2.drmsName) > 0
     assert isinstance(drmaa2.drmsName, str)

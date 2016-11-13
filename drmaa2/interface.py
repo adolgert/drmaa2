@@ -1,6 +1,17 @@
+"""
+This uses the native Python module, ctypes, to wrap the DRMAA2
+library. It provides a bare-bones interface to every function in
+the library.
+
+You need two things to understand this file.
+The OGF spec is GFD.194.pdf at
+https://www.ogf.org/ogf/doku.php/documents/documents.
+Find the drmaa2.h header file for UGE.
+"""
+from copy import copy
 import ctypes
 from ctypes import c_char_p, c_void_p, c_long, c_int, c_longlong, c_float
-from ctypes import POINTER, CFUNCTYPE, Structure
+from ctypes import POINTER, CFUNCTYPE, Structure, cast, pointer
 from enum import Enum
 import os
 from pathlib import Path
@@ -12,6 +23,9 @@ DRMAA_LIB = None
 
 
 class TIME(Structure):
+    """
+    Wrap the Unix time_t structure.
+    """
     _fields_ = [("tm_sec", c_int),
                 ("tm_min", c_int),
                 ("tm_hour", c_int),
@@ -24,6 +38,12 @@ class TIME(Structure):
                 ("tm_gmtoff", c_long),
                 ("tm_zone", c_char_p)]
 
+
+# The following can be read, in order, from drmaa2.h,
+# provided with the Univa Grid Engine implementation.
+HOME_DIR = "$DRMAA2_HOME_DIR$"
+WORKING_DIR = "$DRMAA2_WORKING_DIR$"
+PARAMETRIC_INDEX = "$DRMAA2_INDEX$"
 
 ZERO_TIME = TIME(tm_sec = 0)
 INFINITE_TIME = TIME(tm_sec=-1)
@@ -158,7 +178,30 @@ drmaa2_listtype = enum_type
 drmaa2_os = enum_type
 drmaa2_jstate = enum_type
 
-drmaa2_string = c_char_p
+class drmaa2_string(c_char_p):
+    """Making this a subclass disables automatic creation of the string.
+    If ctypes converts the char* to a string, then it isn't possible
+    to call drmaa2_string_free to free the value. Use the resulting
+    string with::
+
+       return return_str(DRMAA2_LIB.drmaa2_get_name(jsession))
+    """
+    pass
+
+
+def return_str(returned_from_drmaa2_call):
+    """Retrieves a string and frees memory associated with the pointer.
+
+    Why is the ctypes usual method not good enough? It doesn't free
+    memory automatically, so wrapping a function like char* get_name()
+    will lose the char*.
+    """
+    LOGGER.debug("enter return_str")
+    result = returned_from_drmaa2_call.value
+    DRMAA_LIB.drmaa2_string_free(pointer(returned_from_drmaa2_call))
+    LOGGER.debug("leave return_str")
+    return result.decode()
+
 
 drmaa2_list_s = c_void_p
 drmaa2_list = drmaa2_list_s
@@ -339,16 +382,20 @@ def load_drmaa_library():
         DRMAA_LIB = ctypes.cdll.LoadLibrary(str(drmaa2_name))
     except OSError as ose:
         raise Exception("Cannot open the DRMAA_LIB for DRMAA", ose)
-    print("initializing DRMAA2")
+    LOGGER.debug("Initializing DRMAA2")
 
+    # The argument type is a c_void_p which takes any pointer.
+    # Note well! Most free functions accept a pointer as argument.
+    # This one accepts a pointer to a pointer. Fail to dereference,
+    # and segmentation faults will result.
     DRMAA_LIB.drmaa2_string_free.restype = None
-    DRMAA_LIB.drmaa2_string_free.argtypes = [drmaa2_string]
+    DRMAA_LIB.drmaa2_string_free.argtypes = [POINTER(drmaa2_string)]
 
     DRMAA_LIB.drmaa2_list_create.restype = drmaa2_list
     DRMAA_LIB.drmaa2_list_create.argtypes =\
             [drmaa2_listtype, DRMAA2_LIST_ENTRYFREE]
     DRMAA_LIB.drmaa2_list_free.restype = None
-    DRMAA_LIB.drmaa2_list_free.argtypes = [drmaa2_list]
+    DRMAA_LIB.drmaa2_list_free.argtypes = [POINTER(drmaa2_list)]
     DRMAA_LIB.drmaa2_list_get.restype = c_void_p
     DRMAA_LIB.drmaa2_list_get.argtypes = [drmaa2_list, c_long]
     DRMAA_LIB.drmaa2_list_add.restype = drmaa2_error
@@ -365,7 +412,7 @@ def load_drmaa_library():
 
     # Nonstandard
     DRMAA_LIB.uge_drmaa2_list_free_root.restype = None
-    DRMAA_LIB.uge_drmaa2_list_free_root.argtypes = [drmaa2_list]
+    DRMAA_LIB.uge_drmaa2_list_free_root.argtypes = [POINTER(drmaa2_list)]
     # Nonstandard
     DRMAA_LIB.uge_drmaa2_list_set.restype = drmaa2_error
     DRMAA_LIB.uge_drmaa2_list_set.argtypes = [drmaa2_list, c_long, c_void_p]
@@ -373,7 +420,7 @@ def load_drmaa_library():
     DRMAA_LIB.drmaa2_dict_create.restype = drmaa2_dict
     DRMAA_LIB.drmaa2_dict_create.argtypes = [DRMAA2_DICT_ENTRYFREE]
     DRMAA_LIB.drmaa2_dict_free.restype = None
-    DRMAA_LIB.drmaa2_dict_free.argtypes = [drmaa2_dict]
+    DRMAA_LIB.drmaa2_dict_free.argtypes = [POINTER(drmaa2_dict)]
     DRMAA_LIB.drmaa2_dict_list.restype = drmaa2_string_list
     DRMAA_LIB.drmaa2_dict_list.argtypes = [drmaa2_dict]
     DRMAA_LIB.drmaa2_dict_has.restype = drmaa2_bool
@@ -388,35 +435,41 @@ def load_drmaa_library():
     DRMAA_LIB.drmaa2_jinfo_create.restype = POINTER(DRMAA2_JINFO)
     DRMAA_LIB.drmaa2_jinfo_create.argtypes = []
     DRMAA_LIB.drmaa2_jinfo_free.restype = None
-    DRMAA_LIB.drmaa2_jinfo_free.argtypes = [POINTER(DRMAA2_JINFO)]
+    DRMAA_LIB.drmaa2_jinfo_free.argtypes = [POINTER(POINTER(DRMAA2_JINFO))]
 
     DRMAA_LIB.drmaa2_slotinfo_free.restype = None
-    DRMAA_LIB.drmaa2_slotinfo_free.argtypes = [POINTER(DRMAA2_SLOTINFO)]
+    DRMAA_LIB.drmaa2_slotinfo_free.argtypes = [
+        POINTER(POINTER(DRMAA2_SLOTINFO))]
 
     DRMAA_LIB.drmaa2_rinfo_free.restype = None
-    DRMAA_LIB.drmaa2_rinfo_free.argtypes = [POINTER(DRMAA2_RINFO)]
+    DRMAA_LIB.drmaa2_rinfo_free.argtypes = [POINTER(POINTER(DRMAA2_RINFO))]
 
     DRMAA_LIB.drmaa2_jtemplate_create.restype = POINTER(DRMAA2_JTEMPLATE)
     DRMAA_LIB.drmaa2_jtemplate_create.argtypes = []
     DRMAA_LIB.drmaa2_jtemplate_free.restype = None
-    DRMAA_LIB.drmaa2_jtemplate_free.argtypes = [POINTER(DRMAA2_JTEMPLATE)]
+    DRMAA_LIB.drmaa2_jtemplate_free.argtypes = [
+        POINTER(POINTER(DRMAA2_JTEMPLATE))]
 
     DRMAA_LIB.drmaa2_rtemplate_create.restype = POINTER(DRMAA2_RTEMPLATE)
     DRMAA_LIB.drmaa2_rtemplate_create.argtypes = []
     DRMAA_LIB.drmaa2_rtemplate_free.restype = None
-    DRMAA_LIB.drmaa2_rtemplate_free.argtypes = [POINTER(DRMAA2_RTEMPLATE)]
+    DRMAA_LIB.drmaa2_rtemplate_free.argtypes = [
+        POINTER(POINTER(DRMAA2_RTEMPLATE))]
 
     DRMAA_LIB.drmaa2_notification_free.restype = None
-    DRMAA_LIB.drmaa2_notification_free.argtypes = [POINTER(DRMAA2_NOTIFICATION)]
+    DRMAA_LIB.drmaa2_notification_free.argtypes = [
+        POINTER(POINTER(DRMAA2_NOTIFICATION))]
 
     DRMAA_LIB.drmaa2_queueinfo_free.restype = None
-    DRMAA_LIB.drmaa2_queueinfo_free.argtypes = [POINTER(DRMAA2_QUEUEINFO)]
+    DRMAA_LIB.drmaa2_queueinfo_free.argtypes = [
+        POINTER(POINTER(DRMAA2_QUEUEINFO))]
 
     DRMAA_LIB.drmaa2_version_free.restype = None
-    DRMAA_LIB.drmaa2_version_free.argtypes = [POINTER(DRMAA2_VERSION)]
+    DRMAA_LIB.drmaa2_version_free.argtypes = [POINTER(POINTER(DRMAA2_VERSION))]
 
     DRMAA_LIB.drmaa2_machineinfo_free.restype = None
-    DRMAA_LIB.drmaa2_machineinfo_free.argtypes = [POINTER(DRMAA2_MACHINEINFO)]
+    DRMAA_LIB.drmaa2_machineinfo_free.argtypes = [
+        POINTER(POINTER(DRMAA2_MACHINEINFO))]
 
     DRMAA_LIB.drmaa2_jtemplate_impl_spec.restype = drmaa2_string_list
     DRMAA_LIB.drmaa2_jtemplate_impl_spec.argtypes = []
@@ -442,18 +495,23 @@ def load_drmaa_library():
                                                     c_char_p, c_char_p]
 
     DRMAA_LIB.drmaa2_jsession_free.restype = None
-    DRMAA_LIB.drmaa2_jsession_free.argtypes = [POINTER(DRMAA2_JSESSION)]
+    DRMAA_LIB.drmaa2_jsession_free.argtypes = [
+        POINTER(POINTER(DRMAA2_JSESSION))]
     DRMAA_LIB.drmaa2_rsession_free.restype = None
-    DRMAA_LIB.drmaa2_rsession_free.argtypes = [POINTER(drmaa2_rsession)]
+    DRMAA_LIB.drmaa2_rsession_free.argtypes = [
+        POINTER(POINTER(drmaa2_rsession))]
     DRMAA_LIB.drmaa2_msession_free.restype = None
-    DRMAA_LIB.drmaa2_msession_free.argtypes = [POINTER(DRMAA2_MSESSION)]
+    DRMAA_LIB.drmaa2_msession_free.argtypes = [
+        POINTER(POINTER(DRMAA2_MSESSION))]
     DRMAA_LIB.drmaa2_j_free.restype = None
-    DRMAA_LIB.drmaa2_j_free.argtypes = [POINTER(DRMAA2_J)]
+    DRMAA_LIB.drmaa2_j_free.argtypes = [
+        POINTER(POINTER(DRMAA2_J))]
     DRMAA_LIB.drmaa2_jarray_free.restype = None
-    DRMAA_LIB.drmaa2_jarray_free.argtypes = [POINTER(DRMAA2_JARRAY)]
+    DRMAA_LIB.drmaa2_jarray_free.argtypes = [
+        POINTER(POINTER(DRMAA2_JARRAY))]
     # These are in the header drmaa2.h but not libdrmaa2.so.
     # DRMAA_LIB.drmaa2_r_free.restype = None
-    # DRMAA_LIB.drmaa2_r_free.argtypes = [DRMAA2_R]
+    # DRMAA_LIB.drmaa2_r_free.argtypes = [POINTER(drmaa2_r)]
 
     DRMAA_LIB.drmaa2_rsession_get_contact.restype = drmaa2_string
     DRMAA_LIB.drmaa2_rsession_get_contact.argtypes = [drmaa2_rsession]
@@ -600,4 +658,3 @@ def load_drmaa_library():
     DRMAA_LIB.drmaa2_register_event_notification.argtypes = [
         POINTER(DRMAA2_CALLBACK)]
     return DRMAA_LIB
-
