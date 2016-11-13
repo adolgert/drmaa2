@@ -39,28 +39,6 @@ class TIME(Structure):
                 ("tm_zone", c_char_p)]
 
 
-# The following can be read, in order, from drmaa2.h,
-# provided with the Univa Grid Engine implementation.
-HOME_DIR = "$DRMAA2_HOME_DIR$"
-WORKING_DIR = "$DRMAA2_WORKING_DIR$"
-PARAMETRIC_INDEX = "$DRMAA2_INDEX$"
-
-ZERO_TIME = TIME(tm_sec = 0)
-INFINITE_TIME = TIME(tm_sec=-1)
-NOW = TIME(tm_sec=-2)
-
-UNSET_BOOL = 0
-UNSET_CALLBACK = c_void_p(0)
-UNSET_DICT = c_void_p(0)
-UNSET_ENUM = -1
-UNSET_LIST = c_void_p(0)
-UNSET_NUM = -1
-UNSET_STRING = c_void_p(0)
-UNSET_TIME = TIME(tm_sec=-3)
-UNSET_JINFO = c_void_p(0)
-UNSET_VERSION = c_void_p(0)
-
-
 class Bool(Enum):
     false = 0
     true = 1
@@ -84,27 +62,27 @@ class Capability(Enum):
 
 
 class CPU(Enum):
-    unset_cpu = -1
-    other_cpu = 0
-    alpha = 1
-    arm = 2
-    arm64 = 3
-    cell = 4
-    parisc = 5
-    parisc_64 = 6
-    x86 = 7
-    x64 = 8
-    ia64 = 9
-    mips = 10
-    mips64 = 11
-    ppc = 12
-    ppc64 = 13
-    sparc = 14
-    sparc64 = 15
+    unset = -1
+    OTHER = 0
+    ALPHA = 1
+    ARM = 2
+    ARM64 = 3
+    CELL = 4
+    PARISC = 5
+    PARISC_64 = 6
+    X86 = 7
+    X64 = 8
+    IA64 = 9
+    MIPS = 10
+    MIPS64 = 11
+    PPC = 12
+    PPC64 = 13
+    SPARC = 14
+    SPARC64 = 15
 
 
 class Error(Enum):
-    unset_error = -1
+    unset = -1
     success = 0
     denied_by_drms = 1
     drm_communication = 2
@@ -123,14 +101,14 @@ class Error(Enum):
 
 
 class Event(Enum):
-    unset_event = -1
+    unset = -1
     new_state = 0
     migrated = 1
     attribute_change = 2
 
 
 class ListType(Enum):
-    unset_listtype = -1
+    unset = -1
     stringlist = 0
     joblist = 1
     queueinfolist = 2
@@ -140,23 +118,23 @@ class ListType(Enum):
 
 
 class OS(Enum):
-    unset_os = -1
-    other_os = 0
-    aix = 1
-    bsd = 2
-    linux = 3
-    hpux = 4
-    irix = 5
-    macos = 6
-    sunos = 7
-    tru64 = 8
-    unixware = 9
-    win = 10
-    winnt = 11
+    unset = -1
+    OTHER = 0
+    AIX = 1
+    BSD = 2
+    LINUX = 3
+    HPUX = 4
+    IRIX = 5
+    MACOS = 6
+    SUNOS = 7
+    TRU64 = 8
+    UNIXWARE = 9
+    WIN = 10
+    WINNT = 11
 
 
 class JState(Enum):
-    unset_jstate = -1
+    unset = -1
     undetermined = 0
     queued = 1
     queued_held = 2
@@ -217,6 +195,27 @@ drmaa2_dict = c_void_p
 DRMAA2_DICT_ENTRYFREE = CFUNCTYPE(None,
                                   POINTER(c_char_p), POINTER(c_char_p))
 
+# The following can be read, in order, from drmaa2.h,
+# provided with the Univa Grid Engine implementation.
+HOME_DIR = "$DRMAA2_HOME_DIR$"
+WORKING_DIR = "$DRMAA2_WORKING_DIR$"
+PARAMETRIC_INDEX = "$DRMAA2_INDEX$"
+
+ZERO_TIME = TIME(tm_sec = 0)
+INFINITE_TIME = TIME(tm_sec=-1)
+NOW = TIME(tm_sec=-2)
+
+UNSET_BOOL = 0
+UNSET_CALLBACK = c_void_p(0)
+UNSET_DICT = c_void_p(0)
+UNSET_ENUM = -1
+UNSET_LIST = c_void_p(0)
+UNSET_NUM = -1
+UNSET_STRING = drmaa2_string()
+UNSET_TIME = TIME(tm_sec=-3)
+UNSET_JINFO = c_void_p(0)
+UNSET_VERSION = c_void_p(0)
+
 
 class DRMAA2_JINFO(Structure):
     _fields_ = [("jobId", drmaa2_string),
@@ -260,7 +259,7 @@ class JTImplementationSpecific(Structure):
 
 
 class DRMAA2_JTEMPLATE(Structure):
-    _fields_ = [("remotecommand", drmaa2_string),
+    _fields_ = [("remoteCommand", drmaa2_string),
                 ("args", drmaa2_string_list),
                 ("submitAsHold", drmaa2_bool),
                 ("rerunnable", drmaa2_bool),

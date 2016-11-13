@@ -4,7 +4,8 @@ the DRMAA2 library using the interface module to
 provide access to the native library.
 """
 import logging
-from ctypes import cast
+from ctypes import cast, byref
+from uuid import uuid4
 from .interface import *
 
 
@@ -17,9 +18,19 @@ def drms_version():
     version_ptr = DRMAA_LIB.drmaa2_get_drms_version()
     version = version_ptr.contents
     value = (version.major.value.decode(), version.minor.value.decode())
-    DRMAA_LIB.drmaa2_version_free(pointer(version_ptr))
+    DRMAA_LIB.drmaa2_version_free(byref(version_ptr))
     LOGGER.debug("leave drms_version")
     return value
+
+
+def last_error():
+    """Gets the last error from DRMAA library."""
+    return return_str(DRMAA_LIB.drmaa2_lasterror_text())
+
+
+def last_errno():
+    """Gets the last error from DRMAA library."""
+    return DRMAA_LIB.drmaa2_lasterror()
 
 
 class DRMAA2Exception(Exception):
@@ -102,17 +113,125 @@ def CheckError(errval):
         13: ImplementationSpecific
     }
     if errval > 0:
-        err_text = DRMAA_LIB.drmaa2_lasterror_text().decode()
+        err_text = last_error()
         LOGGER.debug(err_text)
         raise errs[errval](err_text)
+
+
+class DRMAA2String:
+    """A descriptor for wrapped strings on structs.
+    There is no drmaa2_string_create, so we use ctypes' own allocation
+    and freeing, which happens by default."""
+    def __init__(self, name):
+        self.name = name
+        self.was_set = False
+
+    def __get__(self, obj, type=None):
+        wrapped_value = getattr(obj._wrapped.contents, self.name).value
+        if wrapped_value is None:  # Exclude case where it is "".
+            return wrapped_value
+        else:
+            return wrapped_value.decode()
+
+    def __set__(self, obj, value):
+        wrapped_value = getattr(obj._wrapped.contents, self.name)
+        if wrapped_value.value and not self.was_set:
+            DRMAA_LIB.drmaa2_string_free(byref(wrapped_value))
+        else:
+            pass  # No need to free it if it's null.
+        if value is not None:
+            setattr(obj._wrapped.contents, self.name,
+                    drmaa2_string(value.encode()))
+            self.was_set = True
+        else:
+            setattr(obj._wrapped.contents, self.name, UNSET_STRING)
+
+    def free(self):
+        pass
+
+def print_string_list(wrapped_list):
+    string_cnt = DRMAA_LIB.drmaa2_list_size(wrapped_list)
+    assert last_errno() < 1
+    ptrs = list()
+    vals = list()
+    for string_idx in range(string_cnt):
+        void_p = DRMAA_LIB.drmaa2_list_get(wrapped_list, string_idx)
+        ptrs.append(void_p)
+        assert last_errno() < 1
+        name = cast(void_p, drmaa2_string).value.decode()
+        vals.append(name)
+    print(", ".join(vals))
+    print(", ".join([str(x) for x in ptrs]))
+
+
+class DRMAA2StringList:
+    def __init__(self, name, list_type):
+        """Name is the name of the member of the instance.
+        list_type is the ListType enum for this list.
+        If there isn't a list, we make one, so we free it, too."""
+        assert isinstance(list_type, ListType)
+        self.name = name
+        self.list_type = list_type
+        self.allocated = None
+
+    def __get__(self, obj, type=None):
+        wrapped_list = getattr(obj._wrapped.contents, self.name)
+        if wrapped_list:
+            string_list = list()
+            string_cnt = DRMAA_LIB.drmaa2_list_size(wrapped_list)
+            assert last_errno() < 1
+            for string_idx in range(string_cnt):
+                void_p = DRMAA_LIB.drmaa2_list_get(wrapped_list, string_idx)
+                assert last_errno() < 1
+                name = cast(void_p, drmaa2_string).value.decode()
+                LOGGER.debug("{} at index {}".format(name, string_idx))
+                string_list.append(name)
+            return string_list
+        else:
+            return []
+
+    def __set__(self, obj, value):
+        wrapped = getattr(obj._wrapped.contents, self.name)
+        if wrapped:
+            name_cnt = DRMAA_LIB.drmaa2_list_size(wrapped)
+            LOGGER.debug("Emptying string {} len {}".format(
+                self.name, name_cnt))
+            while name_cnt > 0:
+                LOGGER.debug("Deleting from list")
+                CheckError(DRMAA_LIB.drmaa2_list_del(wrapped, 0))
+                name_cnt = DRMAA_LIB.drmaa2_list_size(wrapped)
+        else:
+            LOGGER.debug("Creating string {}".format(self.name))
+            wrapped = DRMAA_LIB.drmaa2_list_create(
+                self.list_type.value, DRMAA2_LIST_ENTRYFREE())
+            self.allocated = wrapped
+            setattr(obj._wrapped.contents, self.name, wrapped)
+
+        if value:
+            # In order to manage memory, attach the list to this object.
+            self.value = [x.encode() for x in value]
+            LOGGER.debug("Adding string {} values {}".format(self.name, value))
+            string_obj = drmaa2_string()
+            for idx in range(len(value)):
+                LOGGER.debug("value going in {} at {}".format(
+                    string_obj.value, string_obj))
+                CheckError(DRMAA_LIB.drmaa2_list_add(
+                    wrapped, self.value[idx]))
+
+        print_string_list(wrapped)
+
+    def free(self):
+        if self.allocated:
+
+            DRMAA_LIB.drmaa2_list_free(byref(self.allocated))
 
 
 class JobTemplate:
     """A JobTemplate is both how to specify a job and how to search for jobs.
     """
     def __init__(self):
-        self.remoteCommand = None
-        self.args = None
+        self._wrapped = DRMAA_LIB.drmaa2_jtemplate_create()
+
         self.submitAsHold = None
         self.rerunnable = None
         self.jobEnvironment = None
@@ -143,6 +262,9 @@ class JobTemplate:
         self.accountingId = None
         self.jt_pe = None
 
+    remoteCommand = DRMAA2String("remoteCommand")
+    args = DRMAA2StringList("args", ListType.stringlist)
+
     def as_structure(self):
         structure = DRMAA2_JTEMPLATE()
         structure.remoteCommand = str(self.remoteCommand).encode()
@@ -160,23 +282,18 @@ class JobTemplate:
 
 
 class JobSession:
-    def __init__(self, name, contact=None):
+    def __init__(self, name=None, contact=None):
         """The IDL description says this should have a contact name,
         but it isn't supported. UGE always makes the contact your
         user name."""
-        assert isinstance(name, str)
+        name = name or uuid4().hex
         LOGGER.debug("Creating JobSession {}".format(name))
-        if contact:
-            contact_str = contact.encode()
-        else:
-            contact_str = c_char_p()
+        contact_str = contact.encode() if contact else c_char_p()
         self._session = DRMAA_LIB.drmaa2_create_jsession(
             name.encode(), contact_str
         )
         if not self._session:
-            raise RuntimeError(
-                DRMAA_LIB.drmaa2_lasterror_text().decode()
-            )
+            raise RuntimeError(last_error())
         self.name = name
 
     @classmethod
@@ -185,9 +302,7 @@ class JobSession:
         the job would be listed here as tangkend@crunch."""
         session = DRMAA_LIB.drmaa2_open_jsession(name.encode())
         if not session:
-            raise RuntimeError(
-                DRMAA_LIB.drmaa2_lasterror_text().decode()
-            )
+            raise RuntimeError(last_error())
         # Skip the __init__ if this job session already exists.
         obj = cls.__new__(cls)
         obj._session = session
@@ -206,28 +321,34 @@ class JobSession:
                 name = cast(void_p, drmaa2_string).value.decode()
                 session_names.append(name)
             LOGGER.debug("Retrieved names of sessions.")
+            DRMAA_LIB.drmaa2_list_free(byref(c_void_p(name_list)))
         else:
             pass  # Nothing to return.
         return session_names
 
     def close(self):
+        """A session must be closed to relinquish resources."""
         LOGGER.debug("close JobSession")
         CheckError(DRMAA_LIB.drmaa2_close_jsession(self._session))
 
     def destroy(self):
+        """Destroying a session removes it from the scheduler's memory."""
         LOGGER.debug("Destroying {}".format(self.name))
-        CheckError(DRMAA_LIB.drmaa2_destroy_jsession(
-            self.name.encode()))
+        JobSession.destroy_named(self.name)
 
     @staticmethod
     def destroy_named(name):
+        """Destroy a session by name, removing it from the
+        scheduler's memory."""
         LOGGER.debug("Destroying {}".format(name))
         CheckError(DRMAA_LIB.drmaa2_destroy_jsession(
             name.encode()))
 
     def free(self):
+        """This frees allocated free store to hold the session.
+        Call this after closing the session."""
         LOGGER.debug("free JobSession")
-        DRMAA_LIB.drmaa2_jsession_free(self._session)  # void
+        DRMAA_LIB.drmaa2_jsession_free(pointer(self._session))  # void
 
     @property
     def contact(self):
