@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from ctypes import cast
 from .interface import *
 
@@ -89,14 +90,68 @@ def CheckError(errval):
         raise errs[errval](err_text)
 
 
+class JobTemplate:
+    def __init__(self):
+        self.remoteCommand = None
+        self.args = None
+        self.submitAsHold = None
+        self.rerunnable = None
+        self.jobEnvironment = None
+        self.workingDirectory = None
+        self.jobCategory = None
+        self.email = None
+        self.emailOnStarted = None
+        self.emailOnTerminated = None
+        self.jobName = None
+        self.inputPath = None
+        self.outputPath = None
+        self.errorPath = None
+        self.joinFiles = None
+        self.reservationId = None
+        self.queueName = None
+        self.minSlots = None
+        self.maxSlots = None
+        self.priority = None
+        self.candidateMachines = None
+        self.minPhysMemory = None
+        self.machineOS = None
+        self.machineArch = None
+        self.startTime = None
+        self.deadlineTime = None
+        self.stageInFiles = None
+        self.stageOutFiles = None
+        self.resourceLimits = None
+        self.accountingId = None
+        self.jt_pe = None
+
+    def as_structure(self):
+        structure = DRMAA2_JTEMPLATE()
+        structure.remoteCommand = str(self.remoteCommand).encode()
+        if self.args:
+            structure.args = " ".join(self.args).encode()
+        else:
+            structure.args = UNSET_STRING
+        if self.submitAsHold is not None:
+            if self.submitAsHold:
+                structure.submitAsHold = Bool.true.value
+            else:
+                structure.submitAsHold = Bool.false.value
+        else:
+            structure.submitAsHold = UNSET_BOOL
+
+
 class JobSession:
-    def __init__(self, name):
+    def __init__(self, name, contact=None):
         """The IDL description says this should have a contact name,
         but it isn't supported."""
         assert isinstance(name, str)
         LOGGER.debug("Creating JobSession {}".format(name))
+        if contact:
+            contact_str = contact.encode()
+        else:
+            contact_str = c_char_p()
         self._session = DRMAA_LIB.drmaa2_create_jsession(
-            name.encode(), c_char_p()
+            name.encode(), contact_str
         )
         if not self._session:
             raise RuntimeError(
@@ -155,12 +210,7 @@ class JobSession:
     @property
     def contact(self):
         contact_str = DRMAA_LIB.drmaa2_jsession_get_contact(self._session)
-        return contact_str.decode()
-
-
-def create_job_session():
-    lib = load_drmaa2()
-    print(lib)
-    print(lib.drmaa2_create_jsession)
-
-
+        if contact_str:
+            return contact_str.decode()
+        else:
+            return None
