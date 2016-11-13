@@ -1,3 +1,4 @@
+import datetime
 import getpass
 import logging
 import sys
@@ -74,3 +75,71 @@ def test_job_template_list():
     assert not jt.args
     jt.args = []
     assert not jt.args
+
+
+def test_job_template_bool():
+    logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
+    jt = drmaa2.JobTemplate()
+    assert not jt.submitAsHold
+    jt.submitAsHold = True
+    assert jt.submitAsHold
+    jt.submitAsHold = True
+    assert jt.submitAsHold
+    jt.submitAsHold = False
+    assert not jt.submitAsHold
+
+
+def test_job_template_dict():
+    logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
+    jt = drmaa2.JobTemplate()
+    assert not jt.jobEnvironment
+    jt.jobEnvironment = dict()
+    assert not jt.jobEnvironment
+    jt.jobEnvironment = {"PATH": "/bin:/homes/kheuton/bin", "LIB": "libm"}
+    env = jt.jobEnvironment
+    assert env["PATH"] == "/bin:/homes/kheuton/bin"
+    assert "LIB" in env
+    jt.jobEnvironment = {"SPACE": "race"}
+    assert jt.jobEnvironment["SPACE"] == "race"
+    assert len(jt.jobEnvironment) == 1
+
+
+def test_job_template_enum():
+    logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
+    jt = drmaa2.JobTemplate()
+    assert not jt.machineOS
+    jt.machineOS = None
+    assert not jt.machineOS
+    jt.machineOS = "LINUX"
+    assert jt.machineOS == "LINUX"
+    jt.machineOS = "WIN"
+    assert jt.machineOS == "WIN"
+    jt.machineOS = None
+    assert not jt.machineOS
+
+
+
+def test_job_template_longlong():
+    logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
+    jt = drmaa2.JobTemplate()
+    assert not jt.minSlots
+    jt.minSlots = None
+    assert not jt.minSlots
+    jt.minSlots = 3
+    assert jt.minSlots == 3
+    jt.minSlots = 5
+    assert jt.minSlots == 5
+    jt.minSlots = None
+    assert not jt.minSlots
+
+
+def test_job_template_time():
+    logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
+    jt = drmaa2.JobTemplate()
+    assert not jt.startTime
+    jt.startTime = None
+    assert not jt.startTime
+    jt.startTime = datetime.datetime.now()
+    assert jt.startTime
+    jt.startTime = None
+    assert not jt.startTime

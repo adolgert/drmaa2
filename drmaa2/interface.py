@@ -283,13 +283,13 @@ class DRMAA2_JTEMPLATE(Structure):
                 ("minPhysMemory", c_longlong),
                 ("machineOS", drmaa2_os),
                 ("machineArch", drmaa2_cpu),
-                ("startTime", POINTER(TIME)),
+                ("startTime", TIME),
                 ("deadlineTime", POINTER(TIME)),
                 ("stageInFiles", drmaa2_dict),
                 ("stageOutFiles", drmaa2_dict),
                 ("resourceLimits", drmaa2_dict),
                 ("accountingId", drmaa2_string),
-                ("implementationSpecific", c_void_p)]
+                ("implementationSpecific", JTImplementationSpecific)]
 
 
 class DRMAA2_RTEMPLATE(Structure):

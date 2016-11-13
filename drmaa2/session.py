@@ -4,7 +4,9 @@ the DRMAA2 library using the interface module to
 provide access to the native library.
 """
 import logging
+from copy import deepcopy
 from ctypes import cast, byref
+import datetime
 from uuid import uuid4
 from .interface import *
 
@@ -118,6 +120,18 @@ def CheckError(errval):
         raise errs[errval](err_text)
 
 
+class DRMAA2Bool:
+    def __init__(self, name):
+        self.name = name
+
+    def __get__(self, obj, type=None):
+        wrapped_value = getattr(obj._wrapped.contents, self.name)
+        return Bool(wrapped_value)==Bool.true
+
+    def __set__(self, obj, value):
+        setattr(obj._wrapped.contents, self.name, 1 if value else 0)
+
+
 class DRMAA2String:
     """A descriptor for wrapped strings on structs.
     There is no drmaa2_string_create, so we use ctypes' own allocation
@@ -141,7 +155,7 @@ class DRMAA2String:
             pass  # No need to free it if it's null.
         if value is not None:
             setattr(obj._wrapped.contents, self.name,
-                    drmaa2_string(value.encode()))
+                    drmaa2_string(str(value).encode()))
             self.was_set = True
         else:
             setattr(obj._wrapped.contents, self.name, UNSET_STRING)
@@ -226,59 +240,189 @@ class DRMAA2StringList:
             DRMAA_LIB.drmaa2_list_free(byref(self.allocated))
 
 
+class DRMAA2Dict:
+    def __init__(self, name):
+        self.name = name
+
+    def __get__(self, obj, type=None):
+        wrapped = getattr(obj._wrapped.contents, self.name)
+        if wrapped:
+            key_list = DRMAA_LIB.drmaa2_dict_list(wrapped)
+            if key_list:
+                result = dict()
+                key_cnt = DRMAA_LIB.drmaa2_list_size(key_list)
+                for key_idx in range(key_cnt):
+                    void_ptr = DRMAA_LIB.drmaa2_list_get(key_list, key_idx)
+                    key_ptr = cast(void_ptr, drmaa2_string).value
+                    value_ptr = DRMAA_LIB.drmaa2_dict_get(wrapped, key_ptr)
+                    LOGGER.debug("{} {}".format(
+                        key_ptr.decode(), value_ptr.decode()))
+                    result[key_ptr.decode()] = value_ptr.decode()
+                return result
+            else:
+                return dict()
+        else:
+            return dict()
+
+    def __set__(self, obj, value):
+        wrapped = getattr(obj._wrapped.contents, self.name)
+        if not wrapped:
+            wrapped = DRMAA_LIB.drmaa2_dict_create(DRMAA2_DICT_ENTRYFREE())
+            setattr(obj._wrapped.contents, self.name, wrapped)
+        else:
+            key_list = DRMAA_LIB.drmaa2_dict_list(wrapped)
+            if key_list:
+                key_cnt = DRMAA_LIB.drmaa2_list_size(key_list)
+                for key_idx in range(key_cnt):
+                    void_ptr = DRMAA_LIB.drmaa2_list_get(key_list, key_idx)
+                    key_ptr = cast(void_ptr, drmaa2_string).value
+                    CheckError(DRMAA_LIB.drmaa2_dict_del(wrapped, key_ptr))
+
+        self.dict = {(k.encode(), v.encode()) for (k, v) in value.items()}
+        for key, value in self.dict:
+            CheckError(DRMAA_LIB.drmaa2_dict_set(wrapped, key, value))
+
+
+class DRMAA2LongLong:
+    def __init__(self, name):
+        self.name = name
+
+    def __get__(self, obj, type=None):
+        val = getattr(obj._wrapped.contents, self.name)
+        if val == UNSET_NUM:
+            return None
+        else:
+            return val
+
+    def __set__(self, obj, value):
+        if value is None:
+            value = UNSET_NUM
+        else:
+            value = value
+        setattr(obj._wrapped.contents, self.name, value)
+
+
+class DRMAA2Enum:
+    def __init__(self, name, enum_cls):
+        self.name = name
+        self.enum_cls = enum_cls
+
+    def __get__(self, obj, type=None):
+        name = self.enum_cls(getattr(obj._wrapped.contents, self.name)).name
+        if name == "unset":
+            return None
+        else:
+            return name
+
+    def __set__(self, obj, value):
+        value = value or "unset"
+        setattr(obj._wrapped.contents, self.name, self.enum_cls[value].value)
+
+
+class DRMAA2Time:
+    def __init__(self, name):
+        self.name = name
+
+    def __get__(self, obj, type=None):
+        LOGGER.debug("enter get time {}".format(self.name))
+        time_ptr = getattr(obj._wrapped.contents, self.name)
+        if time_ptr:
+            print("have time_ptr")
+            when = time_ptr
+            print("have time_ptr contents {}".format(when.tm_sec))
+            if when == UNSET_TIME:
+                print("time is unset")
+                return None
+            else:
+                print("have a real time")
+                return datetime.datetime(
+                    year = when.tm_year,
+                    month = when.tm_mon,
+                    day = when.tm_yday,
+                    hour = when.tm_hour,
+                    minute = when.tm_min,
+                    second = when.tm_sec
+                )
+        else:
+            return None
+
+    def __set__(self, obj, value):
+        LOGGER.debug("enter set time {} {}".format(self.name, value))
+        time_ptr = getattr(obj._wrapped.contents, self.name)
+        if time_ptr:
+            when = value.timetuple()
+            time_obj = time_ptr.contents
+            time_obj.tm_sec = when.tm_sec
+            time_obj.tm_min = when.tm_min
+            time_obj.tm_hour = when.tm_hour
+            time_obj.tm_mday = when.tm_mday
+            time_obj.tm_mon = when.tm_mon
+            time_obj.tm_year = when.tm_year
+            time_obj.tm_wday = when.tm_wday
+            time_obj.tm_yday = when.tm_yday
+            time_obj.tm_isdst = when.tm_isdst
+            time_obj.tm_gmtoff = when.tm_gmtoff
+            time_obj.tm_zone = when.tm_zone
+        else:
+            time_obj = TIME()
+            when = value.timetuple()
+            time_obj.tm_sec = when.tm_sec
+            time_obj.tm_min = when.tm_min
+            time_obj.tm_hour = when.tm_hour
+            time_obj.tm_mday = when.tm_mday
+            time_obj.tm_mon = when.tm_mon
+            time_obj.tm_year = when.tm_year
+            time_obj.tm_wday = when.tm_wday
+            time_obj.tm_yday = when.tm_yday
+            time_obj.tm_isdst = when.tm_isdst
+            time_obj.tm_gmtoff = when.tm_gmtoff
+            time_obj.tm_zone = when.tm_zone
+            self.value = time_obj
+            setattr(obj._wrapped.contents, self.name, pointer(time_obj))
+
+
 class JobTemplate:
     """A JobTemplate is both how to specify a job and how to search for jobs.
     """
     def __init__(self):
         self._wrapped = DRMAA_LIB.drmaa2_jtemplate_create()
 
-        self.submitAsHold = None
-        self.rerunnable = None
-        self.jobEnvironment = None
-        self.workingDirectory = None
-        self.jobCategory = None
-        self.email = None
-        self.emailOnStarted = None
-        self.emailOnTerminated = None
-        self.jobName = None
-        self.inputPath = None
-        self.outputPath = None
-        self.errorPath = None
-        self.joinFiles = None
-        self.reservationId = None
-        self.queueName = None
-        self.minSlots = None
-        self.maxSlots = None
-        self.priority = None
-        self.candidateMachines = None
-        self.minPhysMemory = None
-        self.machineOS = None
-        self.machineArch = None
-        self.startTime = None
-        self.deadlineTime = None
-        self.stageInFiles = None
-        self.stageOutFiles = None
-        self.resourceLimits = None
-        self.accountingId = None
-        self.jt_pe = None
-
     remoteCommand = DRMAA2String("remoteCommand")
     args = DRMAA2StringList("args", ListType.stringlist)
+    submitAsHold = DRMAA2Bool("submitAsHold")
+    rerunnable = DRMAA2Bool("rerunnable")
+    jobEnvironment = DRMAA2Dict("jobEnvironment")
+    workingDirectory = DRMAA2String("workingDirectory")
+    jobCategory = DRMAA2String("jobCategory")
+    email = DRMAA2StringList("email", ListType.stringlist)
+    emailOnStarted = DRMAA2Bool("emailOnStarted")
+    emailOnTerminated = DRMAA2Bool("emailOnTerminated")
+    jobName = DRMAA2String("jobName")
+    inputPath = DRMAA2String("inputPath")
+    outputPath = DRMAA2String("outputPath")
+    errorPath = DRMAA2String("errorPath")
+    joinFiles = DRMAA2Bool("joinFiles")
+    reservationId = DRMAA2String("reservationId")
+    queueName = DRMAA2String("queueName")
+    minSlots = DRMAA2LongLong("minSlots")
+    maxSlots = DRMAA2LongLong("maxSlots")
+    priority = DRMAA2LongLong("priority")
+    candidateMachines = DRMAA2StringList("candidateMachines",
+                                         ListType.stringlist)
+    minPhysMemory = DRMAA2LongLong("minPhysMemory")
+    machineOS = DRMAA2Enum("machineOS", OS)
+    machineArch = DRMAA2Enum("machineArch", CPU)
+    startTime = DRMAA2Time("startTime")
+    deadlineTime = DRMAA2Time("deadlineTime")
+    stageInFiles = DRMAA2Dict("stageInFiles")
+    stageOutFiles = DRMAA2Dict("stageOutFiles")
+    resourceLimits = DRMAA2Dict("resourceLimits")
+    accountingId = DRMAA2Dict("accountingId")
+    pe = DRMAA2Dict("uge_jt_pe")
+
 
     def as_structure(self):
-        structure = DRMAA2_JTEMPLATE()
-        structure.remoteCommand = str(self.remoteCommand).encode()
-        if self.args:
-            structure.args = " ".join(self.args).encode()
-        else:
-            structure.args = UNSET_STRING
-        if self.submitAsHold is not None:
-            if self.submitAsHold:
-                structure.submitAsHold = Bool.true.value
-            else:
-                structure.submitAsHold = Bool.false.value
-        else:
-            structure.submitAsHold = UNSET_BOOL
+        return self._wrapped
 
 
 class JobSession:
