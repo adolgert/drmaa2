@@ -13,7 +13,11 @@ Looking at the
 can help, too.
 You also might need to look at
 `Daniel Gruber's blog <http://www.gridengine.eu/index.php/programming-apis/178-the-drmaa2-tutorial-introduction-1-2013-10-05>`_.
+The third place for help is to use the Manual command::
 
+   man -M $SGE_ROOT/man drmaa2_open_jsession
+
+That will get you documentation on most commands.
 
 .. image:: DRMAA2Job.*
    :alt: Three entry points are JobSession, JobInfo, and JobTemplate. They create Jobs or JobArrays. They interact with reservations only through the reservation ID.

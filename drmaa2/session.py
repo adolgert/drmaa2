@@ -389,8 +389,8 @@ class DRMAA2StringList:
             LOGGER.debug("Adding string {} values {}".format(self.name, value))
             string_obj = drmaa2_string()
             for idx in range(len(value)):
-                LOGGER.debug("value going in {} at {}".format(
-                    string_obj.value, string_obj))
+                LOGGER.debug("value going in {} at {} for {}".format(
+                    string_obj.value, string_obj, self.name))
                 CheckError(DRMAA_LIB.drmaa2_list_add(
                     wrapped, self.value[idx]))
 
@@ -614,20 +614,34 @@ class JobTemplate:
     accountingId = DRMAA2Dict("accountingId")
     pe = DRMAA2String("implementationSpecific.pe")
 
-    def as_structure(self):
-        return self._wrapped
-
-    # def __getattr__(self, name):
-    #     return ext_get(self, name, DRMAA_LIB.drmaa2_jtemplate_impl_spec)
-    #
-    # def __setattr__(self, name, value):
-    #     set_special = ext_set(
-    #         self, name, value, DRMAA_LIB.drmaa2_jtemplate_impl_spec)
-    #     if not set_special:
-    #         self.__dict__[name] = value
-
     def implementation_specific(self):
         return implementation_specific(DRMAA_LIB.drmaa2_jtemplate_impl_spec)
+
+    def get_impl_spec(self, name):
+        d_string = DRMAA_LIB.drmaa2_get_instance_value(
+            cast(self._wrapped, c_void_p),
+            name.encode())
+        # This can sometimes cast a spurious error that the value isn't
+        # specified, even though the value is just currently unset.
+        if last_errno() < 1:
+            return return_str(d_string)
+        else:
+            raise DRMAA2Exception(last_error())
+
+    def __repr__(self):
+        return "JobTemplate" + self.__str__()
+
+    def __str__(self):
+        report = list()
+        attributes = [field[0] for field in self._wrapped.contents._fields_]
+        for attr_name in sorted(attributes):
+            try:
+                v = getattr(self, attr_name)
+                if v:
+                    report.append("{}={}".format(attr_name, str(v)))
+            except AttributeError:
+                pass  # eh, OK. the names don't line up.
+        return "({})".format(", ".join(report))
 
 
 def ext_get(parent, name, checker):
@@ -643,6 +657,7 @@ def ext_get(parent, name, checker):
             raise DRMAA2Exception(last_error())
     else:
         raise AttributeError
+
 
 def ext_set(parent, name, value, checker):
     if name in implementation_specific(checker):
@@ -712,7 +727,7 @@ class Notification:
 
 
 class JobSession:
-    def __init__(self, name=None, contact=None):
+    def __init__(self, name=None, contact=None, keep=False):
         """The IDL description says this should have a contact name,
         but it isn't supported. UGE always makes the contact your
         user name."""
@@ -724,7 +739,21 @@ class JobSession:
         )
         if not self._session:
             raise RuntimeError(last_error())
+        self._open = True
         self.name = name
+        self.keep = keep
+
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+        self.__del__()
+        if not self.keep:
+            self.destroy()
+
+
 
     @classmethod
     def from_existing(cls, name):
@@ -759,7 +788,9 @@ class JobSession:
     def close(self):
         """A session must be closed to relinquish resources."""
         LOGGER.debug("close JobSession")
-        CheckError(DRMAA_LIB.drmaa2_close_jsession(self._session))
+        if self._open:
+            CheckError(DRMAA_LIB.drmaa2_close_jsession(self._session))
+            self._open = False
 
     def destroy(self):
         """Destroying a session removes it from the scheduler's memory."""
@@ -773,11 +804,13 @@ class JobSession:
         CheckError(DRMAA_LIB.drmaa2_destroy_jsession(
             name.encode()))
 
-    def free(self):
+    def __del__(self):
         """This frees allocated free store to hold the session.
         Call this after closing the session."""
         LOGGER.debug("free JobSession")
-        DRMAA_LIB.drmaa2_jsession_free(pointer(self._session))  # void
+        if self._session:
+            DRMAA_LIB.drmaa2_jsession_free(pointer(self._session))  # void
+            self._session = None
 
     @property
     def contact(self):
@@ -788,17 +821,49 @@ class JobSession:
             return None
 
     def run(self, job_template):
+        LOGGER.debug("enter run of {}".format(job_template))
         job = DRMAA_LIB.drmaa2_jsession_run_job(
             self._session, job_template._wrapped)
         if not job:
-            raise RuntimeError(last_error)
+            LOGGER.debug("Error submitting job.")
+            raise RuntimeError(last_error())
         job_obj = JobStrategy.from_ptr(job)
+        LOGGER.debug("run returning {}".format(job_obj))
         DRMAA_LIB.drmaa2_j_free(job)
         return job_obj
 
-    def next_terminated(self, job_list, how_long):
+    def wait_any_terminated(self, job_list, how_long):
+        """
+        What is the next job that completes on the job list.
+        All jobs in the job list must be part of this session.
+
+        :param job_list: Either a list of Job objects or a DRMAA2List.
+        :param how_long: Length as seconds, or the enum Times.infinite,
+                         Times.now, or the string "infinite" or "now" or "zero".
+        :return: a Job object or None
+        """
+        if isinstance(how_long, int):
+            try:
+                how_long = Times(how_long)
+            except ValueError:
+                if __name__ == '__main__':
+                    pass  # Well, the integer may be correct
+        elif isinstance(how_long, str):
+            how_long = Times[how_long]
+        else:
+            how_long = how_long.value
+        if isinstance(job_list, DRMAA2List):
+            jobs_ptr = job_list.list_ptr
+        else:
+            jobs_ptr = DRMAA2List(job_list, ListType.joblist).list_ptr
         job_ptr = DRMAA_LIB.drmaa2_jsession_wait_any_terminated(
-            self._session, job_list, how_long)
+            self._session, jobs_ptr, how_long)
+        if job_ptr:
+            job = JobStrategy.from_ptr(job_ptr)
+            DRMAA_LIB.drmaa2_j_free(job)
+            return job
+        else:
+            return None
 
 
 def event_callback(cb):

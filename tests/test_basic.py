@@ -23,7 +23,7 @@ def test_manager():
 def test_anonymous_job_session():
     js = drmaa2.JobSession()
     js.close()
-    js.free()
+    js.__del__()
     js.destroy()
 
 
@@ -38,7 +38,7 @@ def test_session():
 
     js = drmaa2.JobSession(stage)
     js.close()
-    js.free()
+    js.__del__()
 
     print(drmaa2.JobSession.names())
 
