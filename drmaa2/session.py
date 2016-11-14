@@ -137,28 +137,36 @@ class DRMAA2String:
     There is no drmaa2_string_create, so we use ctypes' own allocation
     and freeing, which happens by default."""
     def __init__(self, name):
-        self.name = name
+        self.name = name.split(".")
         self.was_set = False
 
     def __get__(self, obj, type=None):
-        wrapped_value = getattr(obj._wrapped.contents, self.name).value
+        if len(self.name) > 1:
+            base = getattr(obj._wrapped.contents, self.name[0])
+        else:
+            base = obj._wrapped.contents
+        wrapped_value = getattr(base, self.name[-1]).value
         if wrapped_value is None:  # Exclude case where it is "".
             return wrapped_value
         else:
             return wrapped_value.decode()
 
     def __set__(self, obj, value):
-        wrapped_value = getattr(obj._wrapped.contents, self.name)
+        if len(self.name) > 1:
+            base = getattr(obj._wrapped.contents, self.name[0])
+        else:
+            base = obj._wrapped.contents
+        wrapped_value = getattr(base, self.name[-1])
         if wrapped_value.value and not self.was_set:
             DRMAA_LIB.drmaa2_string_free(byref(wrapped_value))
         else:
             pass  # No need to free it if it's null.
         if value is not None:
-            setattr(obj._wrapped.contents, self.name,
+            setattr(base, self.name[-1],
                     drmaa2_string(str(value).encode()))
             self.was_set = True
         else:
-            setattr(obj._wrapped.contents, self.name, UNSET_STRING)
+            setattr(base, self.name[-1], UNSET_STRING)
 
     def free(self):
         pass
@@ -347,77 +355,6 @@ class DRMAA2Time:
         setattr(obj._wrapped.contents, self.name, when)
 
 
-class DRMAA2TimeZ:
-    def __init__(self, name):
-        self.name = name
-
-    def __get__(self, obj, type=None):
-        LOGGER.debug("enter get time {}".format(self.name))
-        when = getattr(obj._wrapped.contents, self.name)
-        print("have time_ptr contents {}".format(when.tm_sec))
-        print([x==0 for x in [when.tm_min, when.tm_hour, when.tm_mday,
-                                    when.tm_mon, when.tm_year, when.tm_wday,
-                                    when.tm_yday, when.tm_isdst,
-                                    when.tm_gmtoff]])
-        magic = all([x==0 for x in [when.tm_min, when.tm_hour, when.tm_mday,
-                                    when.tm_mon, when.tm_year, when.tm_wday,
-                                    when.tm_yday, when.tm_isdst,
-                                    when.tm_gmtoff]])
-        if magic:
-            magical = {
-                -3: None,
-                0: ZERO_TIME,
-                -1: INFINITE_TIME,
-                -2: NOW
-            }
-            return magical[when.tm_sec]
-        else:
-            print("have a real time {}".format(when.tm_sec))
-            return datetime.datetime(
-                year = when.tm_year,
-                month = when.tm_mon,
-                day = when.tm_yday,
-                hour = when.tm_hour,
-                minute = when.tm_min,
-                second = when.tm_sec
-            )
-
-    def __set__(self, obj, value):
-        LOGGER.debug("enter set time {} {}".format(self.name, value))
-        time_obj = getattr(obj._wrapped.contents, self.name)
-        if isinstance(value, datetime.datetime):
-            when = value.timetuple()
-            time_obj.tm_sec = when.tm_sec
-            time_obj.tm_min = when.tm_min
-            time_obj.tm_hour = when.tm_hour
-            time_obj.tm_mday = when.tm_mday
-            time_obj.tm_mon = when.tm_mon
-            time_obj.tm_year = when.tm_year
-            time_obj.tm_wday = when.tm_wday
-            time_obj.tm_yday = when.tm_yday
-            time_obj.tm_isdst = when.tm_isdst
-            time_obj.tm_gmtoff = when.tm_gmtoff
-            time_obj.tm_zone = when.tm_zone
-        else:
-            if isinstance(value, TIME):
-                tm_sec = value.tm_sec
-            elif value is None:
-                tm_sec = UNSET_TIME.tm_sec
-            else:
-                raise RuntimeError("What time is {}?".format(value))
-            time_obj.tm_sec = tm_sec
-            time_obj.tm_min = 0
-            time_obj.tm_hour = 0
-            time_obj.tm_mday = 0
-            time_obj.tm_mon = 0
-            time_obj.tm_year = 0
-            time_obj.tm_wday = 0
-            time_obj.tm_yday = 0
-            time_obj.tm_isdst = 0
-            time_obj.tm_gmtoff = 0
-            time_obj.tm_zone = c_char_p()
-
-
 class JobTemplate:
     """A JobTemplate is both how to specify a job and how to search for jobs.
     """
@@ -455,8 +392,7 @@ class JobTemplate:
     stageOutFiles = DRMAA2Dict("stageOutFiles")
     resourceLimits = DRMAA2Dict("resourceLimits")
     accountingId = DRMAA2Dict("accountingId")
-    pe = DRMAA2Dict("uge_jt_pe")
-
+    pe = DRMAA2String("implementationSpecific.pe")
 
     def as_structure(self):
         return self._wrapped
@@ -514,7 +450,6 @@ class JobSession:
 
     def destroy(self):
         """Destroying a session removes it from the scheduler's memory."""
-        LOGGER.debug("Destroying {}".format(self.name))
         JobSession.destroy_named(self.name)
 
     @staticmethod
@@ -538,3 +473,10 @@ class JobSession:
             return contact_str.decode()
         else:
             return None
+
+    def run(self, job_template):
+        job = DRMAA_LIB.drmaa2_jsession_run_job(
+            self._session, job_template._wrapped)
+        if not job:
+            raise RuntimeError(last_error)
+        return job

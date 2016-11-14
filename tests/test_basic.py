@@ -63,6 +63,18 @@ def test_job_template_command():
     assert not jt.remoteCommand
 
 
+def test_job_template_dotted():
+    logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
+    jt = drmaa2.JobTemplate()
+    assert not jt.pe
+    jt.pe = "slots=10000"
+    assert jt.pe == "slots=10000"
+    jt.pe = "blah"
+    assert jt.pe == "blah"
+    jt.pe = None
+    assert not jt.pe
+
+
 def test_job_template_list():
     logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
     jt = drmaa2.JobTemplate()
