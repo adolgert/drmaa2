@@ -18,6 +18,7 @@ Contents:
    :maxdepth: 2
 
    introduction
+   plans
 
 
 Indices and tables

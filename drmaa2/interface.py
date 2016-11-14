@@ -22,23 +22,8 @@ LOGGER = logging.getLogger("drmaa2.interface")
 DRMAA_LIB = None
 
 
-class TIME(Structure):
-    """
-    Wrap the Unix time_t structure.
-    """
-    _fields_ = [("tm_sec", c_int),
-                ("tm_min", c_int),
-                ("tm_hour", c_int),
-                ("tm_mday", c_int),
-                ("tm_mon", c_int),
-                ("tm_year", c_int),
-                ("tm_wday", c_int),
-                ("tm_yday", c_int),
-                ("tm_isdst", c_int),
-                ("tm_gmtoff", c_long),
-                ("tm_zone", c_char_p)]
-
 drmaa2_time = c_longlong
+
 
 class Bool(Enum):
     false = 0
@@ -109,13 +94,17 @@ class Event(Enum):
 
 
 class ListType(Enum):
+    """
+    The DRMAA2 API defines a list of void pointers. This enum tells
+    you which kinds of items are in the list.
+    """
     unset = -1
     stringlist = 0
     joblist = 1
     queueinfolist = 2
     machineinfolist = 3
     slotinfolist = 4
-    resrevationlist = 5
+    reservationlist = 5
 
 
 class OS(Enum):
@@ -179,7 +168,10 @@ def return_str(returned_from_drmaa2_call):
     result = returned_from_drmaa2_call.value
     DRMAA_LIB.drmaa2_string_free(pointer(returned_from_drmaa2_call))
     LOGGER.debug("leave return_str")
-    return result.decode()
+    if result:
+        return result.decode()
+    else:
+        return None
 
 
 drmaa2_list_s = c_void_p
@@ -479,6 +471,8 @@ def load_drmaa_library():
     DRMAA_LIB.drmaa2_machineinfo_free.argtypes = [
         POINTER(POINTER(DRMAA2_MACHINEINFO))]
 
+    # These are dynamic queries to discover what other members
+    # these structs have on this platform.
     DRMAA_LIB.drmaa2_jtemplate_impl_spec.restype = drmaa2_string_list
     DRMAA_LIB.drmaa2_jtemplate_impl_spec.argtypes = []
     DRMAA_LIB.drmaa2_jinfo_impl_spec.restype = drmaa2_string_list
@@ -592,10 +586,10 @@ def load_drmaa_library():
         c_longlong, c_longlong, c_longlong, c_longlong]
     DRMAA_LIB.drmaa2_jsession_wait_any_started.restype = POINTER(DRMAA2_J)
     DRMAA_LIB.drmaa2_jsession_wait_any_started.argtypes = [
-        POINTER(DRMAA2_JSESSION), drmaa2_j_list, POINTER(TIME)]
+        POINTER(DRMAA2_JSESSION), drmaa2_j_list, drmaa2_time]
     DRMAA_LIB.drmaa2_jsession_wait_any_terminated.restype = POINTER(DRMAA2_J)
     DRMAA_LIB.drmaa2_jsession_wait_any_terminated.argtypes = [
-        POINTER(DRMAA2_JSESSION), drmaa2_j_list, POINTER(TIME)]
+        POINTER(DRMAA2_JSESSION), drmaa2_j_list, drmaa2_time]
     DRMAA_LIB.drmaa2_j_suspend.restype = drmaa2_error
     DRMAA_LIB.drmaa2_j_suspend.argtypes = [POINTER(DRMAA2_J)]
     DRMAA_LIB.drmaa2_j_resume.restype = drmaa2_error
@@ -615,7 +609,7 @@ def load_drmaa_library():
     DRMAA_LIB.drmaa2_j_get_info.restype = POINTER(DRMAA2_JINFO)
     DRMAA_LIB.drmaa2_j_get_info.argtypes = [POINTER(DRMAA2_J)]
     DRMAA_LIB.drmaa2_j_wait_started.restype = drmaa2_error
-    DRMAA_LIB.drmaa2_j_wait_started.argtypes = [POINTER(DRMAA2_J), POINTER(TIME)]
+    DRMAA_LIB.drmaa2_j_wait_started.argtypes = [POINTER(DRMAA2_J), drmaa2_time]
     DRMAA_LIB.drmaa2_j_wait_terminated.restype = drmaa2_error
     DRMAA_LIB.drmaa2_j_wait_terminated.argtypes = [POINTER(DRMAA2_J)]
 

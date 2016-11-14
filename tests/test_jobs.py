@@ -3,6 +3,7 @@ import getpass
 import logging
 from pathlib import Path
 import sys
+import pytest
 import drmaa2
 
 
@@ -32,3 +33,17 @@ def test_make_job():
     j2 = drmaa2.Job.from_existing(j._wrapped)
     assert j2.id == "234"
     assert j2.sessionName == "stage"
+
+
+class Counter:
+    def __init__(self):
+        self.count = 0
+    def __call__(self, event, jobId, session, job_state):
+        self.count +=1
+        print(event, jobId, session, job_state)
+
+
+def test_notification():
+    logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
+    with pytest.raises(drmaa2.UnsupportedOperation):
+        drmaa2.register_event_notification(Counter())

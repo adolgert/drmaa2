@@ -162,3 +162,15 @@ def test_job_template_time():
     jt.startTime = "zero"
     assert jt.startTime == "zero"
     assert not jt.deadlineTime
+
+
+def test_job_template_extensible():
+    logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
+    jt = drmaa2.JobTemplate()
+    assert jt.implementation_specific() == ["uge_jt_pe"]
+    jt.uge_jt_pe = "slots=5"
+    assert jt.uge_jt_pe == "slots=5"
+    jt.uge_jt_pe = "slots=7"
+    assert jt.uge_jt_pe == "slots=7"
+    jt.uge_jt_pe = None
+    assert not jt.uge_jt_pe

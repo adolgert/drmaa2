@@ -3,6 +3,7 @@ This creates classes around the Session interface of
 the DRMAA2 library using the interface module to
 provide access to the native library.
 """
+import atexit
 import logging
 from copy import deepcopy
 from ctypes import cast, byref
@@ -33,6 +34,11 @@ def last_error():
 def last_errno():
     """Gets the last error from DRMAA library."""
     return DRMAA_LIB.drmaa2_lasterror()
+
+
+def check_errno():
+    if last_errno() > 0:
+        raise DRMAA2Exception(last_error())
 
 
 class DRMAA2Exception(Exception):
@@ -117,7 +123,10 @@ def CheckError(errval):
     if errval > 0:
         err_text = last_error()
         LOGGER.debug(err_text)
-        raise errs[errval](err_text)
+        if err_text:
+            raise errs[errval](err_text)
+        else:
+            raise errs[errval]()
 
 
 class DRMAA2Bool:
@@ -171,6 +180,7 @@ class DRMAA2String:
     def free(self):
         pass
 
+
 def print_string_list(wrapped_list):
     string_cnt = DRMAA_LIB.drmaa2_list_size(wrapped_list)
     assert last_errno() < 1
@@ -184,6 +194,33 @@ def print_string_list(wrapped_list):
         vals.append(name)
     print(", ".join(vals))
     print(", ".join([str(x) for x in ptrs]))
+
+
+def convert_string_list(string_list):
+    python_list = list()
+    if string_list:
+        string_cnt = DRMAA_LIB.drmaa2_list_size(string_list)
+        check_errno()
+        for string_idx in range(string_cnt):
+            void_p = DRMAA_LIB.drmaa2_list_get(string_list, string_idx)
+            assert last_errno() < 1
+            name = cast(void_p, drmaa2_string).value.decode()
+            LOGGER.debug("{} at index {}".format(name, string_idx))
+            python_list.append(name)
+
+    return python_list
+
+
+def convert_and_free_string_list(string_list):
+    python_list = convert_string_list(string_list)
+    if string_list:
+        DRMAA_LIB.drmaa2_list_free(byref(c_void_p(string_list)))  # void
+    return python_list
+
+
+def job_template_implementation_specific():
+    string_list = DRMAA_LIB.drmaa2_jtemplate_impl_spec()
+    return convert_and_free_string_list(string_list)
 
 
 class DRMAA2StringList:
@@ -240,11 +277,70 @@ class DRMAA2StringList:
                 CheckError(DRMAA_LIB.drmaa2_list_add(
                     wrapped, self.value[idx]))
 
-        print_string_list(wrapped)
 
     def free(self):
         if self.allocated:
+            DRMAA_LIB.drmaa2_list_free(byref(self.allocated))
 
+
+class DRMAA2JobList:
+    def __init__(self, name):
+        """Name is the name of the member of the instance.
+        list_type is the ListType enum for this list.
+        If there isn't a list, we make one, so we free it, too."""
+        self.name = name
+        self.list_type = ListType.joblist
+        self.allocated = None
+
+    def __get__(self, obj, type=None):
+        wrapped_list = getattr(obj._wrapped.contents, self.name)
+        if wrapped_list:
+            string_list = list()
+            string_cnt = DRMAA_LIB.drmaa2_list_size(wrapped_list)
+            assert last_errno() < 1
+            for string_idx in range(string_cnt):
+                void_p = DRMAA_LIB.drmaa2_list_get(wrapped_list, string_idx)
+                assert last_errno() < 1
+                string_list.append(Job.from_existing(
+                    cast(void_p, POINTER(DRMAA2_J))))
+                name = cast(void_p, drmaa2_string).value.decode()
+                LOGGER.debug("{} at index {}".format(name, string_idx))
+                string_list.append(name)
+            return string_list
+        else:
+            return []
+
+    def __set__(self, obj, value):
+        wrapped = getattr(obj._wrapped.contents, self.name)
+        if wrapped:
+            name_cnt = DRMAA_LIB.drmaa2_list_size(wrapped)
+            LOGGER.debug("Emptying string {} len {}".format(
+                self.name, name_cnt))
+            while name_cnt > 0:
+                LOGGER.debug("Deleting from list")
+                CheckError(DRMAA_LIB.drmaa2_list_del(wrapped, 0))
+                name_cnt = DRMAA_LIB.drmaa2_list_size(wrapped)
+        else:
+            LOGGER.debug("Creating string {}".format(self.name))
+            wrapped = DRMAA_LIB.drmaa2_list_create(
+                self.list_type.value, DRMAA2_LIST_ENTRYFREE())
+            self.allocated = wrapped
+            setattr(obj._wrapped.contents, self.name, wrapped)
+
+        if value:
+            # In order to manage memory, attach the list to this object.
+            self.value = [x.encode() for x in value]
+            LOGGER.debug("Adding string {} values {}".format(self.name, value))
+            string_obj = drmaa2_string()
+            for idx in range(len(value)):
+                LOGGER.debug("value going in {} at {}".format(
+                    string_obj.value, string_obj))
+                CheckError(DRMAA_LIB.drmaa2_list_add(
+                    wrapped, self.value[idx]))
+
+
+    def free(self):
+        if self.allocated:
             DRMAA_LIB.drmaa2_list_free(byref(self.allocated))
 
 
@@ -360,6 +456,8 @@ class JobTemplate:
     """
     def __init__(self):
         self._wrapped = DRMAA_LIB.drmaa2_jtemplate_create()
+        # self._extensible = Extensible(
+        #     self, DRMAA_LIB.drmaa2_jtemplate_impl_spec)
 
     remoteCommand = DRMAA2String("remoteCommand")
     args = DRMAA2StringList("args", ListType.stringlist)
@@ -397,6 +495,59 @@ class JobTemplate:
     def as_structure(self):
         return self._wrapped
 
+    # def __getattr__(self, name):
+    #     return ext_get(self, name, DRMAA_LIB.drmaa2_jtemplate_impl_spec)
+    #
+    # def __setattr__(self, name, value):
+    #     set_special = ext_set(
+    #         self, name, value, DRMAA_LIB.drmaa2_jtemplate_impl_spec)
+    #     if not set_special:
+    #         self.__dict__[name] = value
+
+    def implementation_specific(self):
+        return implementation_specific(DRMAA_LIB.drmaa2_jtemplate_impl_spec)
+
+
+def ext_get(parent, name, checker):
+    if name in implementation_specific(checker):
+        d_string = DRMAA_LIB.drmaa2_get_instance_value(
+            cast(parent._wrapped, c_void_p),
+            name.encode())
+        # This can sometimes cast a spurious error that the value isn't
+        # specified, even though the value is just currently unset.
+        if last_errno() < 1:
+            return return_str(d_string)
+        else:
+            raise DRMAA2Exception(last_error())
+    else:
+        raise AttributeError
+
+def ext_set(parent, name, value, checker):
+    if name in implementation_specific(checker):
+        if value is None:
+            value = "".encode()
+        else:
+            value = value.encode()
+        DRMAA_LIB.drmaa2_set_instance_value(
+            cast(parent._wrapped, c_void_p),
+            name.encode(),
+            value)
+        check_errno()
+        return True
+    else:
+        return False
+
+def implementation_specific(checker):
+    LOGGER.debug("enter implementation_specific {}".format(DRMAA_LIB))
+    d_string = checker()
+    return convert_and_free_string_list(d_string)
+
+
+def describe(self, name):
+    d_string = DRMAA_LIB.drmaa2_describe_attribute(
+        cast(self.parent._wrapped, c_void_p), name.encode())
+    return return_str(d_string)
+
 
 class Job:
     def __init__(self, id, sessionName):
@@ -423,6 +574,16 @@ class Job:
 
     def __repr__(self):
         return "Job({}, {})".format(self.id, self.sessionName)
+
+
+class Notification:
+    def __init__(self, notification_struct):
+        self._wrapped = notification_struct
+
+    event = DRMAA2Enum("event", Event)
+    jobId = DRMAA2String("jobId")
+    sessionName = DRMAA2String("sessionName")
+    jobState = DRMAA2Enum("jobState", JState)
 
 
 class JobSession:
@@ -507,3 +668,34 @@ class JobSession:
         if not job:
             raise RuntimeError(last_error)
         return Job.from_existing(job)
+
+    def next_terminated(self, job_list, how_long):
+        job_ptr = DRMAA_LIB.drmaa2_jsession_wait_any_terminated(
+            self._session, job_list, how_long)
+
+
+def event_callback(cb):
+    """You don't want to have to write a callback function that
+    decodes the C structs, so this decodes the values and sends
+    them gently to the actual callback."""
+    def wrapper(notification_ptr):
+        notification = Notification(notification_ptr.contents)
+        cb(notification.event, notification.jobId, notification.sessionName,
+           notification.jobState)
+        DRMAA_LIB.drmaa2_notification_free(notification_ptr)
+    return wrapper
+
+
+def register_event_notification(callback):
+    """Register to receive notifications of events for new states,
+    migration, or change of attributes.
+    Unsupported in Univa Grid Engine"""
+    callback_ptr = DRMAA2_CALLBACK(event_callback(callback))
+    LOGGER.debug("callback is {}".format(callback_ptr))
+    CheckError(DRMAA_LIB.drmaa2_register_event_notification(callback_ptr))
+    atexit.register(unset_event_notification)
+
+
+def unset_event_notification():
+    LOGGER.debug("unset event notification")
+    CheckError(DRMAA_LIB.drmaa2_register_event_notification(DRMAA2_CALLBACK()))

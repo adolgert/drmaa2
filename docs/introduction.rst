@@ -13,3 +13,22 @@ Looking at the
 can help, too.
 You also might need to look at
 `Daniel Gruber's blog <http://www.gridengine.eu/index.php/programming-apis/178-the-drmaa2-tutorial-introduction-1-2013-10-05>`_.
+
+
+.. image:: DRMAA2Job.*
+   :alt: Three entry points are JobSession, JobInfo, and JobTemplate. They create Jobs or JobArrays. They interact with reservations only through the reservation ID.
+
+The objects in red are entry points, meaning you can create one
+from scratch, and then from these make the blue ones.
+
+.. image:: DRMAA2Monitor.*
+   :alt: A monitoring session lets you see QueueInfo, MachineInfo, and
+         lists of jobs.
+
+Monitoring is all about getting lists of things.
+
+.. image:: DRMAA2Reservation.*
+   :alt: Entry points are reservationtemplate and ReservationSession.
+         From these you get the Reservation and ReservationInfo.
+
+Reservations also require a session. Entry points are in red.
