@@ -398,6 +398,33 @@ class JobTemplate:
         return self._wrapped
 
 
+class Job:
+    def __init__(self, id, sessionName):
+        """Use this to create a new job.
+
+        :param id str: The Job ID
+        :param session_name str: The name of the DRMAA job session."""
+        self._value = DRMAA2_J()
+        self._wrapped = pointer(self._value)
+        self.id = id
+        self.sessionName = sessionName
+
+    @classmethod
+    def from_existing(cls, job_struct):
+        obj = cls.__new__(cls)
+        obj._wrapped = job_struct
+        return obj
+
+    id = DRMAA2String("id")
+    sessionName = DRMAA2String("sessionName")
+
+    def __str__(self):
+        return "({}, {})".format(self.id, self.sessionName)
+
+    def __repr__(self):
+        return "Job({}, {})".format(self.id, self.sessionName)
+
+
 class JobSession:
     def __init__(self, name=None, contact=None):
         """The IDL description says this should have a contact name,
@@ -479,4 +506,4 @@ class JobSession:
             self._session, job_template._wrapped)
         if not job:
             raise RuntimeError(last_error)
-        return job
+        return Job.from_existing(job)

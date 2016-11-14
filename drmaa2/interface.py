@@ -355,14 +355,14 @@ DRMAA2_CALLBACK = CFUNCTYPE(None, POINTER(DRMAA2_NOTIFICATION))
 # UGE-specific
 class DRMAA2_J(Structure):
     _fields_ = [("id", drmaa2_string),
-                ("session_name", drmaa2_string)]
+                ("sessionName", drmaa2_string)]
 
 
 # UGE-specific
 class DRMAA2_JARRAY(Structure):
     _fields_ = [("id", drmaa2_string),
-                ("job_list", drmaa2_j_list),
-                ("session_name", drmaa2_string)]
+                ("jobList", drmaa2_j_list),
+                ("sessionName", drmaa2_string)]
 
 
 # UGE-specific
