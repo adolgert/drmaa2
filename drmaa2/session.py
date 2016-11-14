@@ -4,6 +4,8 @@ the DRMAA2 library using the interface module to
 provide access to the native library.
 """
 import atexit
+import collections
+from collections.abc import Sequence
 import logging
 from copy import deepcopy
 from ctypes import cast, byref
@@ -196,6 +198,52 @@ def print_string_list(wrapped_list):
     print(", ".join([str(x) for x in ptrs]))
 
 
+class StringStrategy:
+    @staticmethod
+    def from_void(void_ptr):
+        """Makes a Python object which is a copy of the value."""
+        return cast(void_ptr, drmaa2_string).value.decode()
+
+    @staticmethod
+    def to_void(name_str):
+        """Sets up the Python object so that ctypes can convert it
+        to be passed to the library. You have to keep a copy of this
+        object around, meaning keep a reference to it within Python
+        for the duration of its use in the library."""
+        return name_str.encode()
+
+    @staticmethod
+    def compare_pointers(a, b):
+        return void_to_str(a) == void_to_str(b)
+
+
+class JobStrategy:
+    @staticmethod
+    def from_void(void_ptr):
+        return JobStrategy.from_ptr(cast(void_ptr, POINTER(DRMAA2_J)))
+
+    @staticmethod
+    def from_ptr(void_ptr):
+        j = cast(void_ptr, POINTER(DRMAA2_J))
+        if j:
+            c = j.contents
+            return Job(c.id.value.decode(), c.sessionName.value.decode())
+        else:
+            return None
+
+    @staticmethod
+    def to_void(job):
+        j = DRMAA2_J()
+        j.id = job.id.encode()
+        j.sessionName = job.sessionName.encode()
+        return byref(j)
+
+    @staticmethod
+    def compare_pointers(a, b):
+        return JobStrategy.from_void(a) == JobStrategy.from_void(b)
+        # return libc.memcmp(a, b, ctypes.sizeof(DRMAA2_J))
+
+
 def convert_string_list(string_list):
     python_list = list()
     if string_list:
@@ -218,9 +266,78 @@ def convert_and_free_string_list(string_list):
     return python_list
 
 
-def job_template_implementation_specific():
-    string_list = DRMAA_LIB.drmaa2_jtemplate_impl_spec()
-    return convert_and_free_string_list(string_list)
+class DRMAA2List(Sequence):
+    """A DRMAAList owns a DRMAA list of things."""
+
+    translators = {
+        ListType.stringlist: StringStrategy,
+        ListType.joblist: JobStrategy
+    }
+
+    def __init__(self, python_entries, list_type=ListType.stringlist):
+        """If a pointer is passed to this class, then this class
+        is responsible for freeing that list pointer. If none is passed,
+        then this class creates a list pointer."""
+        self.list_type = self.hint_type(list_type)
+        self.strategy = self.translators[self.list_type]
+        self.list_ptr = DRMAA_LIB.drmaa2_list_create(
+            self.list_type.value, DRMAA2_LIST_ENTRYFREE())
+        self._pin = [self.strategy.to_void(x) for x in python_entries]
+        for add_item in self._pin:
+            CheckError(DRMAA_LIB.drmaa2_list_add(self.list_ptr, add_item))
+
+    @staticmethod
+    def hint_type(list_type):
+        if isinstance(list_type, ListType):
+            return list_type
+        elif isinstance(list_type, str):
+            return ListType[list_type]
+        else:
+            return ListType(list_type)
+
+    @classmethod
+    def from_existing(cls, list_ptr, list_type):
+        obj = cls.__new__(cls)
+        obj.list_ptr = list_ptr
+        obj.list_type = obj.hint_type(list_type)
+        obj.strategy = obj.translators[obj.list_type]
+        return obj
+
+    def __getitem__(self, item):
+        if item >= self.__len__():
+            raise IndexError()
+        void_p = DRMAA_LIB.drmaa2_list_get(self.list_ptr, item)
+        return self.strategy.from_void(void_p)
+
+    def __len__(self):
+        return DRMAA_LIB.drmaa2_list_size(self.list_ptr)
+
+    def __del__(self):
+        """This isn't called when you call del but when garbage collection
+        happens."""
+        if self.list_ptr:
+            DRMAA_LIB.drmaa2_list_free(byref(c_void_p(self.list_ptr)))
+            self.list_ptr = None
+
+    def __eq__(self, other):
+        """Compares two DRMAA2Lists"""
+        self_cnt = self.__len__()
+        other_cnt = other.__len__()
+        if self_cnt != other_cnt:
+            return False
+        for cmp_idx in range(self_cnt):
+            self_p = DRMAA_LIB.drmaa2_list_get(self.list_ptr, cmp_idx)
+            other_p = DRMAA_LIB.drmaa2_list_get(other.list_ptr, cmp_idx)
+            if not self.strategy.compare_pointers(self_p, other_p):
+                return False
+        return True
+
+    @staticmethod
+    def return_list(string_ptr, list_type):
+        l_ptr = DRMAA2List.from_existing(string_ptr, list_type)
+        l_py = list(l_ptr)
+        l_ptr.__del__()
+        return l_py
 
 
 class DRMAA2StringList:
@@ -281,6 +398,11 @@ class DRMAA2StringList:
     def free(self):
         if self.allocated:
             DRMAA_LIB.drmaa2_list_free(byref(self.allocated))
+
+
+def job_template_implementation_specific():
+    string_list = DRMAA_LIB.drmaa2_jtemplate_impl_spec()
+    return convert_and_free_string_list(string_list)
 
 
 class DRMAA2JobList:
@@ -549,31 +671,34 @@ def describe(self, name):
     return return_str(d_string)
 
 
-class Job:
-    def __init__(self, id, sessionName):
-        """Use this to create a new job.
+Job = collections.namedtuple("Job", "id sessionName")
 
-        :param id str: The Job ID
-        :param session_name str: The name of the DRMAA job session."""
-        self._value = DRMAA2_J()
-        self._wrapped = pointer(self._value)
-        self.id = id
-        self.sessionName = sessionName
 
-    @classmethod
-    def from_existing(cls, job_struct):
-        obj = cls.__new__(cls)
-        obj._wrapped = job_struct
-        return obj
-
-    id = DRMAA2String("id")
-    sessionName = DRMAA2String("sessionName")
-
-    def __str__(self):
-        return "({}, {})".format(self.id, self.sessionName)
-
-    def __repr__(self):
-        return "Job({}, {})".format(self.id, self.sessionName)
+# class Job:
+#     def __init__(self, id, sessionName):
+#         """Use this to create a new job.
+#
+#         :param id str: The Job ID
+#         :param session_name str: The name of the DRMAA job session."""
+#         self._value = DRMAA2_J()
+#         self._wrapped = pointer(self._value)
+#         self.id = id
+#         self.sessionName = sessionName
+#
+#     @classmethod
+#     def from_existing(cls, job_struct):
+#         obj = cls.__new__(cls)
+#         obj._wrapped = job_struct
+#         return obj
+#
+#     id = DRMAA2String("id")
+#     sessionName = DRMAA2String("sessionName")
+#
+#     def __str__(self):
+#         return "({}, {})".format(self.id, self.sessionName)
+#
+#     def __repr__(self):
+#         return "Job({}, {})".format(self.id, self.sessionName)
 
 
 class Notification:
@@ -667,7 +792,9 @@ class JobSession:
             self._session, job_template._wrapped)
         if not job:
             raise RuntimeError(last_error)
-        return Job.from_existing(job)
+        job_obj = JobStrategy.from_ptr(job)
+        DRMAA_LIB.drmaa2_j_free(job)
+        return job_obj
 
     def next_terminated(self, job_list, how_long):
         job_ptr = DRMAA_LIB.drmaa2_jsession_wait_any_terminated(

@@ -30,9 +30,6 @@ def test_make_job():
     j = drmaa2.Job(id="234", sessionName="stage")
     assert j.id == "234"
     assert j.sessionName == "stage"
-    j2 = drmaa2.Job.from_existing(j._wrapped)
-    assert j2.id == "234"
-    assert j2.sessionName == "stage"
 
 
 class Counter:

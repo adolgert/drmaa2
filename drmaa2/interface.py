@@ -10,6 +10,7 @@ Find the drmaa2.h header file for UGE.
 """
 from copy import copy
 import ctypes
+import ctypes.util
 from ctypes import c_char_p, c_void_p, c_long, c_int, c_longlong, c_float
 from ctypes import POINTER, CFUNCTYPE, Structure, cast, pointer
 from enum import Enum
@@ -146,6 +147,7 @@ drmaa2_listtype = enum_type
 drmaa2_os = enum_type
 drmaa2_jstate = enum_type
 
+
 class drmaa2_string(c_char_p):
     """Making this a subclass disables automatic creation of the string.
     If ctypes converts the char* to a string, then it isn't possible
@@ -154,7 +156,17 @@ class drmaa2_string(c_char_p):
 
        return return_str(DRMAA2_LIB.drmaa2_get_name(jsession))
     """
-    pass
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return self.value == other.encode()
+        else:
+            return self.value == other.value
+
+    def __ne__(self, other):
+        if isinstance(other, str):
+            return self.value != other.encode()
+        else:
+            return self.value != other.value
 
 
 def return_str(returned_from_drmaa2_call):
@@ -218,7 +230,30 @@ UNSET_JINFO = c_void_p(0)
 UNSET_VERSION = c_void_p(0)
 
 
-class DRMAA2_JINFO(Structure):
+libc_name = ctypes.util.find_library("c")
+libc = ctypes.CDLL(libc_name)
+libc.memcmp.argtypes = (ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t)
+
+
+class CompareStructure(Structure):
+    def __eq__(self, other):
+        same = True
+        for (attr_name, _) in self._fields_:
+            a, b = getattr(self, attr_name), getattr(other, attr_name)
+            if isinstance(a, ctypes.Array):
+                if a[:] != b[:]:
+                    same = False
+                # or still True
+            elif a != b:
+                same = False
+            # else still True
+        return same
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+
+class DRMAA2_JINFO(CompareStructure):
     _fields_ = [("jobId", drmaa2_string),
                 ("exitStatus", c_int),
                 ("terminatingSignal", drmaa2_string),
@@ -238,12 +273,12 @@ class DRMAA2_JINFO(Structure):
                 ("implementationSpecific", c_void_p)]
 
 
-class DRMAA2_SLOTINFO(Structure):
+class DRMAA2_SLOTINFO(CompareStructure):
     _fields_ = [("machineName", drmaa2_string),
                 ("slots", c_longlong)]
 
 
-class DRMAA2_RINFO(Structure):
+class DRMAA2_RINFO(CompareStructure):
     _fields_ = [("reservationId", drmaa2_string),
                 ("reservationName", drmaa2_string),
                 ("reservedStartTime", drmaa2_time),
@@ -255,11 +290,11 @@ class DRMAA2_RINFO(Structure):
 
 
 # For UGE
-class JTImplementationSpecific(Structure):
+class JTImplementationSpecific(CompareStructure):
     _fields_ = [("pe", drmaa2_string)]
 
 
-class DRMAA2_JTEMPLATE(Structure):
+class DRMAA2_JTEMPLATE(CompareStructure):
     _fields_ = [("remoteCommand", drmaa2_string),
                 ("args", drmaa2_string_list),
                 ("submitAsHold", drmaa2_bool),
@@ -293,7 +328,7 @@ class DRMAA2_JTEMPLATE(Structure):
                 ("implementationSpecific", JTImplementationSpecific)]
 
 
-class DRMAA2_RTEMPLATE(Structure):
+class DRMAA2_RTEMPLATE(CompareStructure):
     _fields_ = [("reservationName", drmaa2_string),
                 ("startTime", drmaa2_time),
                 ("endTime", drmaa2_time),
@@ -309,24 +344,24 @@ class DRMAA2_RTEMPLATE(Structure):
                 ("implementationSpecific", c_void_p)]
 
 
-class DRMAA2_NOTIFICATION(Structure):
+class DRMAA2_NOTIFICATION(CompareStructure):
     _fields_ = [("event", drmaa2_event),
                 ("jobId", drmaa2_string),
                 ("sessionName", drmaa2_string),
                 ("jobState", drmaa2_jstate)]
 
 
-class DRMAA2_QUEUEINFO(Structure):
+class DRMAA2_QUEUEINFO(CompareStructure):
     _fields_ = [("name", drmaa2_string),
                 ("implementationSpecific", c_void_p)]
 
 
-class DRMAA2_VERSION(Structure):
+class DRMAA2_VERSION(CompareStructure):
     _fields_ = [("major", drmaa2_string),
                 ("minor", drmaa2_string)]
 
 
-class DRMAA2_MACHINEINFO(Structure):
+class DRMAA2_MACHINEINFO(CompareStructure):
     _fields_ = [("name", drmaa2_string),
                 ("available", drmaa2_bool),
                 ("sockets", c_longlong),
@@ -345,26 +380,26 @@ DRMAA2_CALLBACK = CFUNCTYPE(None, POINTER(DRMAA2_NOTIFICATION))
 
 
 # UGE-specific
-class DRMAA2_J(Structure):
+class DRMAA2_J(CompareStructure):
     _fields_ = [("id", drmaa2_string),
                 ("sessionName", drmaa2_string)]
 
 
 # UGE-specific
-class DRMAA2_JARRAY(Structure):
+class DRMAA2_JARRAY(CompareStructure):
     _fields_ = [("id", drmaa2_string),
                 ("jobList", drmaa2_j_list),
                 ("sessionName", drmaa2_string)]
 
 
 # UGE-specific
-class DRMAA2_JSESSION(Structure):
+class DRMAA2_JSESSION(CompareStructure):
     _fields_ = [("contact", drmaa2_string),
                 ("name", drmaa2_string)]
 
 
 # UGE-specific
-class DRMAA2_MSESSION(Structure):
+class DRMAA2_MSESSION(CompareStructure):
     _fields_ = [("name", drmaa2_string)]
 
 
