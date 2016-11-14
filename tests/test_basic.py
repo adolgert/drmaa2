@@ -143,3 +143,10 @@ def test_job_template_time():
     assert jt.startTime
     jt.startTime = None
     assert not jt.startTime
+    jt.startTime = "now"
+    assert jt.startTime == "now"
+    jt.startTime = "infinite"
+    assert jt.startTime == "infinite"
+    jt.startTime = "zero"
+    assert jt.startTime == "zero"
+    assert not jt.deadlineTime

@@ -38,6 +38,7 @@ class TIME(Structure):
                 ("tm_gmtoff", c_long),
                 ("tm_zone", c_char_p)]
 
+drmaa2_time = c_longlong
 
 class Bool(Enum):
     false = 0
@@ -201,9 +202,17 @@ HOME_DIR = "$DRMAA2_HOME_DIR$"
 WORKING_DIR = "$DRMAA2_WORKING_DIR$"
 PARAMETRIC_INDEX = "$DRMAA2_INDEX$"
 
-ZERO_TIME = TIME(tm_sec = 0)
-INFINITE_TIME = TIME(tm_sec=-1)
-NOW = TIME(tm_sec=-2)
+ZERO_TIME = drmaa2_time(0)
+INFINITE_TIME = drmaa2_time(-1)
+NOW = drmaa2_time(-2)
+
+
+class Times(Enum):
+    unset = -3
+    zero = 0
+    infinite = -1
+    now = -2
+
 
 UNSET_BOOL = 0
 UNSET_CALLBACK = c_void_p(0)
@@ -212,7 +221,7 @@ UNSET_ENUM = -1
 UNSET_LIST = c_void_p(0)
 UNSET_NUM = -1
 UNSET_STRING = drmaa2_string()
-UNSET_TIME = TIME(tm_sec=-3)
+UNSET_TIME = drmaa2_time(-3)
 UNSET_JINFO = c_void_p(0)
 UNSET_VERSION = c_void_p(0)
 
@@ -229,11 +238,11 @@ class DRMAA2_JINFO(Structure):
                 ("jobOwner", drmaa2_string),
                 ("slots", c_longlong),
                 ("queueName", drmaa2_string),
-                ("wallclockTime", POINTER(TIME)),
+                ("wallclockTime", drmaa2_time),
                 ("cpuTime", c_longlong),
-                ("submissionTime", POINTER(TIME)),
-                ("dispatchTime", POINTER(TIME)),
-                ("finishTime", POINTER(TIME)),
+                ("submissionTime", drmaa2_time),
+                ("dispatchTime", drmaa2_time),
+                ("finishTime", drmaa2_time),
                 ("implementationSpecific", c_void_p)]
 
 
@@ -245,8 +254,8 @@ class DRMAA2_SLOTINFO(Structure):
 class DRMAA2_RINFO(Structure):
     _fields_ = [("reservationId", drmaa2_string),
                 ("reservationName", drmaa2_string),
-                ("reservedStartTime", POINTER(TIME)),
-                ("reservedEndTime", POINTER(TIME)),
+                ("reservedStartTime", drmaa2_time),
+                ("reservedEndTime", drmaa2_time),
                 ("usersACL", drmaa2_string_list),
                 ("reservedSlots", c_longlong),
                 ("reservedMachines", drmaa2_slotinfo_list),
@@ -255,7 +264,7 @@ class DRMAA2_RINFO(Structure):
 
 # For UGE
 class JTImplementationSpecific(Structure):
-    _fields_ = [("uge_jt_pe", drmaa2_string)]
+    _fields_ = [("pe", drmaa2_string)]
 
 
 class DRMAA2_JTEMPLATE(Structure):
@@ -283,8 +292,8 @@ class DRMAA2_JTEMPLATE(Structure):
                 ("minPhysMemory", c_longlong),
                 ("machineOS", drmaa2_os),
                 ("machineArch", drmaa2_cpu),
-                ("startTime", TIME),
-                ("deadlineTime", POINTER(TIME)),
+                ("startTime", drmaa2_time),
+                ("deadlineTime", drmaa2_time),
                 ("stageInFiles", drmaa2_dict),
                 ("stageOutFiles", drmaa2_dict),
                 ("resourceLimits", drmaa2_dict),
@@ -294,9 +303,9 @@ class DRMAA2_JTEMPLATE(Structure):
 
 class DRMAA2_RTEMPLATE(Structure):
     _fields_ = [("reservationName", drmaa2_string),
-                ("startTime", POINTER(TIME)),
-                ("endTime", POINTER(TIME)),
-                ("duration", POINTER(TIME)),
+                ("startTime", drmaa2_time),
+                ("endTime", drmaa2_time),
+                ("duration", drmaa2_time),
                 ("minSlots", c_longlong),
                 ("maxSlots", c_longlong),
                 ("jobCategory", drmaa2_string),

@@ -325,33 +325,68 @@ class DRMAA2Time:
 
     def __get__(self, obj, type=None):
         LOGGER.debug("enter get time {}".format(self.name))
-        time_ptr = getattr(obj._wrapped.contents, self.name)
-        if time_ptr:
-            print("have time_ptr")
-            when = time_ptr
-            print("have time_ptr contents {}".format(when.tm_sec))
-            if when == UNSET_TIME:
-                print("time is unset")
+        when = getattr(obj._wrapped.contents, self.name)
+        LOGGER.debug("time is {}".format(when))
+        try:
+            message = Times(when)
+            if message == Times.unset:
                 return None
             else:
-                print("have a real time")
-                return datetime.datetime(
-                    year = when.tm_year,
-                    month = when.tm_mon,
-                    day = when.tm_yday,
-                    hour = when.tm_hour,
-                    minute = when.tm_min,
-                    second = when.tm_sec
-                )
+                return message.name
+        except ValueError:
+            return datetime.datetime.fromtimestamp(when)
+
+    def __set__(self, obj, value):
+        LOGGER.debug("set time for {} to {}".format(self.name, value))
+        if value is None:
+            when = Times["unset"].value
+        elif isinstance(value, str):
+            when = Times[value].value
         else:
-            return None
+            when = int(value.timestamp())
+        setattr(obj._wrapped.contents, self.name, when)
+
+
+class DRMAA2TimeZ:
+    def __init__(self, name):
+        self.name = name
+
+    def __get__(self, obj, type=None):
+        LOGGER.debug("enter get time {}".format(self.name))
+        when = getattr(obj._wrapped.contents, self.name)
+        print("have time_ptr contents {}".format(when.tm_sec))
+        print([x==0 for x in [when.tm_min, when.tm_hour, when.tm_mday,
+                                    when.tm_mon, when.tm_year, when.tm_wday,
+                                    when.tm_yday, when.tm_isdst,
+                                    when.tm_gmtoff]])
+        magic = all([x==0 for x in [when.tm_min, when.tm_hour, when.tm_mday,
+                                    when.tm_mon, when.tm_year, when.tm_wday,
+                                    when.tm_yday, when.tm_isdst,
+                                    when.tm_gmtoff]])
+        if magic:
+            magical = {
+                -3: None,
+                0: ZERO_TIME,
+                -1: INFINITE_TIME,
+                -2: NOW
+            }
+            return magical[when.tm_sec]
+        else:
+            print("have a real time {}".format(when.tm_sec))
+            return datetime.datetime(
+                year = when.tm_year,
+                month = when.tm_mon,
+                day = when.tm_yday,
+                hour = when.tm_hour,
+                minute = when.tm_min,
+                second = when.tm_sec
+            )
 
     def __set__(self, obj, value):
         LOGGER.debug("enter set time {} {}".format(self.name, value))
-        time_ptr = getattr(obj._wrapped.contents, self.name)
-        if time_ptr:
+        time_obj = getattr(obj._wrapped.contents, self.name)
+        if isinstance(value, datetime.datetime):
             when = value.timetuple()
-            time_obj = time_ptr.contents
             time_obj.tm_sec = when.tm_sec
             time_obj.tm_min = when.tm_min
             time_obj.tm_hour = when.tm_hour
@@ -364,21 +399,23 @@ class DRMAA2Time:
             time_obj.tm_gmtoff = when.tm_gmtoff
             time_obj.tm_zone = when.tm_zone
         else:
-            time_obj = TIME()
-            when = value.timetuple()
-            time_obj.tm_sec = when.tm_sec
-            time_obj.tm_min = when.tm_min
-            time_obj.tm_hour = when.tm_hour
-            time_obj.tm_mday = when.tm_mday
-            time_obj.tm_mon = when.tm_mon
-            time_obj.tm_year = when.tm_year
-            time_obj.tm_wday = when.tm_wday
-            time_obj.tm_yday = when.tm_yday
-            time_obj.tm_isdst = when.tm_isdst
-            time_obj.tm_gmtoff = when.tm_gmtoff
-            time_obj.tm_zone = when.tm_zone
-            self.value = time_obj
-            setattr(obj._wrapped.contents, self.name, pointer(time_obj))
+            if isinstance(value, TIME):
+                tm_sec = value.tm_sec
+            elif value is None:
+                tm_sec = UNSET_TIME.tm_sec
+            else:
+                raise RuntimeError("What time is {}?".format(value))
+            time_obj.tm_sec = tm_sec
+            time_obj.tm_min = 0
+            time_obj.tm_hour = 0
+            time_obj.tm_mday = 0
+            time_obj.tm_mon = 0
+            time_obj.tm_year = 0
+            time_obj.tm_wday = 0
+            time_obj.tm_yday = 0
+            time_obj.tm_isdst = 0
+            time_obj.tm_gmtoff = 0
+            time_obj.tm_zone = c_char_p()
 
 
 class JobTemplate:
