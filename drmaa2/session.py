@@ -59,7 +59,7 @@ class JobTemplate:
     stageOutFiles = DRMAA2Dict("stageOutFiles")
     resourceLimits = DRMAA2Dict("resourceLimits")
     accountingId = DRMAA2Dict("accountingId")
-    pe = DRMAA2String("implementationSpecific.pe")
+    implementationSpecific = DRMAA2String("implementationSpecific")
 
     def implementation_specific(self):
         return implementation_specific(DRMAA_LIB.drmaa2_jtemplate_impl_spec)
@@ -74,6 +74,11 @@ class JobTemplate:
             return return_str(d_string)
         else:
             raise DRMAA2Exception(last_error())
+
+    def set_impl_spec(self, name, value):
+        CheckError(DRMAA_LIB.drmaa2_set_instance_value(
+            self._wrapped, name.encode(), value.encode())
+        )
 
     def __repr__(self):
         return "JobTemplate" + self.__str__()
@@ -189,7 +194,6 @@ class JobSession:
         self._open = True
         self.name = name
         self.keep = keep
-
 
     def __enter__(self):
         return self

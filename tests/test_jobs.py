@@ -7,7 +7,7 @@ import pytest
 import drmaa2
 
 
-LOGGER = logging.getLogger("test_basic")
+LOGGER = logging.getLogger("test_jobs")
 
 
 def test_run_job():
@@ -48,37 +48,67 @@ def test_notification():
 
 def test_submit_with_hold():
     logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
-    with drmaa2.JobSession() as js:
-        jt = drmaa2.JobTemplate()
-        jt.remoteCommand = Path("/bin/sleep")
-        jt.args = ["60"]
-        jt.minSlots = 2
-        jobs = list()
-        for idx in range(3):
-            if idx > 0:
-                # Missing something here.
-                LOGGER.debug("submitting job PE {} {}".format(idx, jt))
-                jobs.append(js.run(jt))
-                print("Returned job is {}".format(jobs[-1]))
-            else:
-                LOGGER.debug("submitting job {} {}".format(idx, jt))
-                jobs.append(js.run(jt))
-                print("Returned job is {}".format(jobs[-1]))
+    # The error is that spaces aren't allowed.
+    with pytest.raises(RuntimeError):
+        with drmaa2.JobSession() as js:
+            jt = drmaa2.JobTemplate()
+            jt.remoteCommand = Path("/bin/sleep")
+            jt.args = ["60"]
+            jt.minSlots = 2
+            jobs = list()
+            for idx in range(3):
+                if idx > 0:
+                    previous = jobs[-1].id
+                    pe_str = "-pe multi_slot -hold_jid={}".format(previous)
+                    LOGGER.debug("Using pe string: {}".format(pe_str))
+                    jt.set_impl_spec("uge_jt_pe", pe_str)
+                    jobs.append(js.run(jt))
+                    print("Returned job is {}".format(jobs[-1]))
+                else:
+                    LOGGER.debug("submitting job {} {}".format(idx, jt))
+                    jobs.append(js.run(jt))
+                    print("Returned job is {}".format(jobs[-1]))
 
-@pytest.mark.skip("sigsegv")
+
+def test_submit_with_impl_spec():
+    logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
+    # The error is that spaces aren't allowed.
+    with pytest.raises(RuntimeError):
+        with drmaa2.JobSession() as js:
+            jt = drmaa2.JobTemplate()
+            jt.remoteCommand = Path("/bin/sleep")
+            jt.args = ["60"]
+            jt.minSlots = 2
+            jobs = list()
+            for idx in range(3):
+                if idx > 0:
+                    previous = jobs[-1].id
+                    pe_str = "-pe multi_slot -hold_jid={}".format(previous)
+                    LOGGER.debug("Using pe string: {}".format(pe_str))
+                    jt.implementationSpecific = pe_str
+                    jobs.append(js.run(jt))
+                    print("Returned job is {}".format(jobs[-1]))
+                else:
+                    LOGGER.debug("submitting job {} {}".format(idx, jt))
+                    jobs.append(js.run(jt))
+                    print("Returned job is {}".format(jobs[-1]))
+
+
+
 def test_submit_with_pe():
     logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
     with drmaa2.JobSession() as js:
         jt = drmaa2.JobTemplate()
         jt.remoteCommand = Path("/bin/sleep")
         jt.args = ["60"]
-        jt.pe = "multi_slot"
-        job = js.run(jt)
-        LOGGER.debug("Ran job {}".format(job))
-        assert job
+        jt.set_impl_spec("uge_jt_pe", "multi_slot")
+        for run_idx in range(3):
+            js.args = str(60+run_idx)
+            job = js.run(jt)
+            LOGGER.debug("Ran job {}".format(job))
+            assert job
 
 
-@pytest.mark.skip("sigsegv")
 def test_wait_terminated():
     logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
     with drmaa2.JobSession() as js:
@@ -86,18 +116,14 @@ def test_wait_terminated():
         jt.remoteCommand = Path("/bin/sleep")
         jt.args = ["60"]
         jobs = list()
-        for idx in range(5):
-            if idx > 0:
-                jt.pe = "-hold_jid={}".format(jobs[-1].id)
-                LOGGER.debug("submitting job PE {} {}".format(idx, jt))
-                jobs.append(js.run(jt))
-                print("Returned job is {}".format(jobs[-1]))
-            else:
-                LOGGER.debug("submitting job {} {}".format(idx, jt))
-                jobs.append(js.run(jt))
-                print("Returned job is {}".format(jobs[-1]))
+        job_cnt = 2
+        for idx in range(job_cnt):
+            LOGGER.debug("submitting job {} {}".format(idx, jt))
+            jobs.append(js.run(jt))
+            print("submitted job is {}".format(jobs[-1]))
 
         job_list = drmaa2.DRMAA2List(jobs, "joblist")
         returned = list()
-        for reap_idx in range(5):
+        for reap_idx in range(job_cnt):
             returned.append(js.wait_any_terminated(job_list, "infinite"))
+            LOGGER.debug("completed: {}".format(returned[-1]))
