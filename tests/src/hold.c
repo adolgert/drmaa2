@@ -27,6 +27,7 @@ int job_with_hold() {
         drmaa2_string_free(&error);
         if (6 == err) {
           drmaa2_destroy_jsession(name);
+          printf("destroying session. will try again.");
         }
       }
       --create_cnt;
@@ -47,7 +48,7 @@ int job_with_hold() {
   jt->args = args;
   jtImplementationSpecific jtis = (jtImplementationSpecific) malloc(
         sizeof(jtImplementationSpecific_s));
-  jtis->uge_jt_pe = strdup("-P proj_forecasting");
+  jtis->uge_jt_pe = strdup("multi_slot"); // strdup("-P proj_forecasting");
   if (jt->implementationSpecific == NULL) {
      printf("implementationSpecific starts out NULL\n");
   }
@@ -75,6 +76,32 @@ int job_with_hold() {
       }
   printf("Submitted %s\n", b->id);
 
+  drmaa2_list jobs = drmaa2_list_create(DRMAA2_JOBLIST, NULL);
+  drmaa2_list_add(jobs, a);
+  drmaa2_list_add(jobs, b);
+  int job_cnt = drmaa2_list_size(jobs);
+  while (job_cnt > 0) {
+    drmaa2_j res2 = drmaa2_jsession_wait_any_terminated(
+        js, jobs, DRMAA2_INFINITE_TIME);
+    printf("returned %s %x\n", res2->id, res2);
+    long found = -1;
+    for (long del_idx=0; del_idx < job_cnt; del_idx++) {
+        const drmaa2_j candidate =
+            (const drmaa2_j) drmaa2_list_get(jobs, del_idx);
+        // Look, the pointers are the same. No need to compare values.
+        if (candidate == res2) {
+            found = del_idx;
+            break;
+        }
+    }
+    if (found != -1) {
+      drmaa2_list_del(jobs, found);
+    } else {
+      printf("Couldn't find job\n");
+      return 3;
+    }
+    job_cnt = drmaa2_list_size(jobs);
+  }
 
   printf("Freeing things a\n");
   drmaa2_j_free(&a);
@@ -97,7 +124,9 @@ int job_with_hold() {
   return 0;
 }
 
-
+#include <time.h>
 int main(int argc, char** argv) {
+  int s = sizeof(time_t);
+  printf("time_t is size %d\n", s);
   return job_with_hold();
 }

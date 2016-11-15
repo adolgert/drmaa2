@@ -307,10 +307,11 @@ class JobSession:
         else:
             jobs_ptr = DRMAA2List(job_list, ListType.joblist).list_ptr
         job_ptr = DRMAA_LIB.drmaa2_jsession_wait_any_terminated(
-            self._session, jobs_ptr, how_long)
+            self._session, jobs_ptr, drmaa2_time(how_long))
         if job_ptr:
             job = JobStrategy.from_ptr(job_ptr)
-            DRMAA_LIB.drmaa2_j_free(job)
+            # The returned job_ptr is NOT a copy, so don't free it.
+            # DRMAA_LIB.drmaa2_j_free(byref(job_ptr))
             return job
         else:
             return None

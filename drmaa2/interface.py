@@ -325,7 +325,7 @@ class DRMAA2_JTEMPLATE(CompareStructure):
                 ("stageOutFiles", drmaa2_dict),
                 ("resourceLimits", drmaa2_dict),
                 ("accountingId", drmaa2_string),
-                ("implementationSpecific", JTImplementationSpecific)]
+                ("implementationSpecific", c_void_p)]
 
 
 class DRMAA2_RTEMPLATE(CompareStructure):

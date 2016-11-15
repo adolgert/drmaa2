@@ -37,3 +37,9 @@ can query the Job Session or Monitor Session for lists of
 Jobs and then act on them individually, for instance
 to release a hold, or act on them as a group by
 waiting until any are started or until any are terminated.
+
+Thoughts on memory.
+
+- Can use weakref.finalize to ensure things are called during deletion.
+- There are callbacks for creation of strings and other to do freeing of members.
+- In hold.c, when you free the job template, it auto-frees the list in the template.

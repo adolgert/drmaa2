@@ -114,7 +114,7 @@ def test_wait_terminated():
     with drmaa2.JobSession() as js:
         jt = drmaa2.JobTemplate()
         jt.remoteCommand = Path("/bin/sleep")
-        jt.args = ["60"]
+        jt.args = ["30"]
         jobs = list()
         job_cnt = 2
         for idx in range(job_cnt):
@@ -124,6 +124,13 @@ def test_wait_terminated():
 
         job_list = drmaa2.DRMAA2List(jobs, "joblist")
         returned = list()
+        # This should remove completed jobs from the list every
+        # time one is returned, as shown in src/hold.c.
         for reap_idx in range(job_cnt):
-            returned.append(js.wait_any_terminated(job_list, "infinite"))
+            job = None
+            while not job:
+                job = js.wait_any_terminated(job_list, 10)
+                LOGGER.debug("Returned from wait {}".format(job))
+            returned.append(job)
             LOGGER.debug("completed: {}".format(returned[-1]))
+        assert returned[0] != returned[1]
