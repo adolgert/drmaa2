@@ -44,7 +44,7 @@ def test_session():
 
     jdel = drmaa2.JobSession.from_existing(stage)
     jdel.close()
-    jdel.free()
+    jdel.__del__()
 
     jdel.destroy()
 

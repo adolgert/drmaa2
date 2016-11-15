@@ -56,8 +56,7 @@ def test_submit_with_hold():
         jobs = list()
         for idx in range(3):
             if idx > 0:
-                drmaa2.
-                jt.pe = "multi_slot"
+                # Missing something here.
                 LOGGER.debug("submitting job PE {} {}".format(idx, jt))
                 jobs.append(js.run(jt))
                 print("Returned job is {}".format(jobs[-1]))
@@ -66,7 +65,20 @@ def test_submit_with_hold():
                 jobs.append(js.run(jt))
                 print("Returned job is {}".format(jobs[-1]))
 
+@pytest.mark.skip("sigsegv")
+def test_submit_with_pe():
+    logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
+    with drmaa2.JobSession() as js:
+        jt = drmaa2.JobTemplate()
+        jt.remoteCommand = Path("/bin/sleep")
+        jt.args = ["60"]
+        jt.pe = "multi_slot"
+        job = js.run(jt)
+        LOGGER.debug("Ran job {}".format(job))
+        assert job
 
+
+@pytest.mark.skip("sigsegv")
 def test_wait_terminated():
     logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
     with drmaa2.JobSession() as js:
