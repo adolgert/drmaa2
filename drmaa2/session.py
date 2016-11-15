@@ -753,8 +753,6 @@ class JobSession:
         if not self.keep:
             self.destroy()
 
-
-
     @classmethod
     def from_existing(cls, name):
         """If user tangkend made JobSession crunch, then
