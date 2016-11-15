@@ -2,6 +2,7 @@ import datetime
 import getpass
 import logging
 import sys
+import pytest
 import drmaa2
 
 
@@ -63,6 +64,7 @@ def test_job_template_command():
     assert not jt.remoteCommand
 
 
+@pytest.mark.skip("Dotted feature not in use now.")
 def test_job_template_dotted():
     logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
     jt = drmaa2.JobTemplate()

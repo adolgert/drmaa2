@@ -128,5 +128,9 @@ int job_with_hold() {
 int main(int argc, char** argv) {
   int s = sizeof(time_t);
   printf("time_t is size %d\n", s);
+  printf("%s\n", DRMAA2_CORE_FILE_SIZE);
+  printf("%s\n", DRMAA2_CPU_TIME);
+
+
   return job_with_hold();
 }

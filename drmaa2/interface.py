@@ -8,11 +8,10 @@ The OGF spec is GFD.194.pdf at
 https://www.ogf.org/ogf/doku.php/documents/documents.
 Find the drmaa2.h header file for UGE.
 """
-from copy import copy
 import ctypes
 import ctypes.util
 from ctypes import c_char_p, c_void_p, c_long, c_int, c_longlong, c_float
-from ctypes import POINTER, CFUNCTYPE, Structure, cast, pointer
+from ctypes import POINTER, CFUNCTYPE, Structure, pointer, cast
 from enum import Enum
 import os
 from pathlib import Path
@@ -27,11 +26,15 @@ drmaa2_time = c_longlong
 
 
 class Bool(Enum):
+    """Boolean from drmaa2.h"""
     false = 0
+    "False is 0"
     true = 1
+    "True is 1"
 
 
 class Capability(Enum):
+    """Capabilities of the DRMAA implementation from drmaa2.h"""
     unset_capability = -1
     advance_reservation = 0
     reserve_slots = 1
@@ -49,26 +52,44 @@ class Capability(Enum):
 
 
 class CPU(Enum):
+    """CPU types"""
     unset = -1
     OTHER = 0
+    "Some other architecture"
     ALPHA = 1
+    "Alpha"
     ARM = 2
+    "ARM processor"
     ARM64 = 3
+    "ARM64 processor"
     CELL = 4
+    "Cell"
     PARISC = 5
+    "Parisc"
     PARISC_64 = 6
+    "Parisc_64"
     X86 = 7
+    "x86"
     X64 = 8
+    "x64"
     IA64 = 9
+    "Intel Itanium"
     MIPS = 10
+    "MIPS"
     MIPS64 = 11
+    "MIPS64"
     PPC = 12
+    "PowerPC"
     PPC64 = 13
+    "PowerPC 64"
     SPARC = 14
+    "SPARC"
     SPARC64 = 15
+    "SPARC64"
 
 
 class Error(Enum):
+    """List of errors returned as drmaa2_error."""
     unset = -1
     success = 0
     denied_by_drms = 1
@@ -88,10 +109,14 @@ class Error(Enum):
 
 
 class Event(Enum):
+    """Used by callbacks to determine type of event in DRMAA."""
     unset = -1
     new_state = 0
+    "Job is in a new state"
     migrated = 1
+    "Job migrated to a new machine."
     attribute_change = 2
+    "A job attribute was altered."
 
 
 class ListType(Enum):
@@ -109,32 +134,55 @@ class ListType(Enum):
 
 
 class OS(Enum):
+    """Operating system type."""
     unset = -1
     OTHER = 0
+    "Some other operating system"
     AIX = 1
+    "AIX"
     BSD = 2
+    "BSD"
     LINUX = 3
+    "Linux"
     HPUX = 4
+    "HPUX"
     IRIX = 5
+    "IRIX"
     MACOS = 6
+    "MacOS"
     SUNOS = 7
+    "SunOS"
     TRU64 = 8
+    "Tru64"
     UNIXWARE = 9
+    "Unixware"
     WIN = 10
+    "Windows"
     WINNT = 11
+    "WindowsNT"
 
 
 class JState(Enum):
+    """All job states."""
     unset = -1
     undetermined = 0
+    "Undetermined"
     queued = 1
+    "Queued"
     queued_held = 2
+    "Queued but held in the queue"
     running = 3
+    "Running"
     suspended = 4
+    "Suspended"
     requeued = 5
+    "Requeued"
     requeued_held = 6
+    "Requeued and held"
     done = 7
+    "Done"
     failed = 8
+    "Failed"
 
 
 enum_type = c_int
@@ -212,10 +260,15 @@ NOW = drmaa2_time(-2)
 
 
 class Times(Enum):
+    """If a function accepts a time parameter, these magic
+    times correspond to ZERO time, INFINITE time, or NOW."""
     unset = -3
     zero = 0
+    "Don't wait for any length of time."
     infinite = -1
+    "Wait forever."
     now = -2
+    "Do it now."
 
 
 UNSET_BOOL = 0
@@ -228,6 +281,26 @@ UNSET_STRING = drmaa2_string()
 UNSET_TIME = drmaa2_time(-3)
 UNSET_JINFO = c_void_p(0)
 UNSET_VERSION = c_void_p(0)
+
+
+class ResourceLimits(Enum):
+    """Strings that define resource limits."""
+    core_file_size = "CORE_FILE_SIZE"
+    "Maximum size for a core file."
+    cpu_time = "CPU_TIME"
+    "Max CPU time"
+    data_size = "DATA_SIZE"
+    "Max size of data segment?"
+    file_size = "FILE_SIZE"
+    "Maximum file size to write."
+    open_files = "OPEN_FILES"
+    "Maximum number of open files."
+    stack_size = "STACK_SIZE"
+    "Maximum size of process stack."
+    virtual_memory = "VIRTUAL_MEMORY"
+    "Limit on the virtual memory."
+    wallclock_time = "WALLCLOCK_TIME"
+    "Total wallclock time process can spend."
 
 
 libc_name = ctypes.util.find_library("c")

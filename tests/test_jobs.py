@@ -85,7 +85,7 @@ def test_submit_with_impl_spec():
                     previous = jobs[-1].id
                     pe_str = "-pe multi_slot -hold_jid={}".format(previous)
                     LOGGER.debug("Using pe string: {}".format(pe_str))
-                    jt.implementationSpecific = pe_str
+                    jt.set_impl_spec("uge_jt_pe", pe_str)
                     jobs.append(js.run(jt))
                     print("Returned job is {}".format(jobs[-1]))
                 else:

@@ -9,7 +9,10 @@ DRMAA_LIB = interface.load_drmaa_library()
 
 
 def last_error():
-    """Gets the last error from DRMAA library."""
+    """Gets the last error from DRMAA library.
+
+    :return str: The text of an error message.
+    """
     string_ptr = DRMAA_LIB.drmaa2_lasterror_text()
     if string_ptr:
         message = string_ptr.value.decode()
@@ -20,7 +23,10 @@ def last_error():
 
 
 def last_errno():
-    """Gets the last error from DRMAA library."""
+    """Gets the last error from DRMAA library.
+
+    :return int: The error number which will match the Error enum.
+    """
     return DRMAA_LIB.drmaa2_lasterror()
 
 

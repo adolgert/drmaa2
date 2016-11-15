@@ -37,7 +37,12 @@ STRATEGIES = dict()
 def conversion_strategy(list_type):
     """This class decorator marks that class as being a
     strategy for converting items of a type to and from
-    list entries.
+    list entries. Use it as::
+
+       @conversion_strategy(ListType.joblist)
+       class JobStrategy(object):
+           ...
+
     :param list_type: This is from the ListType enum.
     """
     def conversion(cls):
@@ -68,7 +73,14 @@ class StringStrategy:
 
 
 class DRMAA2List(Sequence):
-    """A DRMAAList owns a DRMAA list of things."""
+    """A DRMAAList owns a DRMAA list of things. This is the Python wrapper.
+    The design choice is to keep the wrapped items as a native pointer
+    and return individual items when requested. It also lets
+    you set all of the items at instantiation but not modify that
+    list of items. It's read-only. This will suffice for passing
+    around a list efficiently without copies, but it also lets
+    you make a copy with list(DRMAA2List instance) if that's what
+    you need."""
     def __init__(self, python_entries, list_type=ListType.stringlist):
         """If a pointer is passed to this class, then this class
         is responsible for freeing that list pointer. If none is passed,
@@ -228,13 +240,15 @@ class DRMAA2StringList:
         if wrapped_list:
             string_list = list()
             string_cnt = DRMAA_LIB.drmaa2_list_size(wrapped_list)
-            assert last_errno() < 1
             for string_idx in range(string_cnt):
                 void_p = DRMAA_LIB.drmaa2_list_get(wrapped_list, string_idx)
-                assert last_errno() < 1
-                name = cast(void_p, drmaa2_string).value.decode()
-                LOGGER.debug("{} at index {}".format(name, string_idx))
-                string_list.append(name)
+                if void_p:
+                    name = cast(void_p, drmaa2_string).value.decode()
+                    LOGGER.debug("{} at index {}".format(name, string_idx))
+                    string_list.append(name)
+                else:
+                    check_errno()
+                    string_list.append(None)
             return string_list
         else:
             return []
