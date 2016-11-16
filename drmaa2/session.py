@@ -267,18 +267,6 @@ class JobStrategy:
         # return libc.memcmp(a, b, ctypes.sizeof(DRMAA2_J))
 
 
-class Notification:
-    """Represents a notification, which is passed back to a callback.
-    This wrapps a DRMAA2Notification."""
-    def __init__(self, notification_struct):
-        self._wrapped = notification_struct
-
-    event = DRMAA2Enum("event", Event)
-    jobId = DRMAA2String("jobId")
-    sessionName = DRMAA2String("sessionName")
-    jobState = DRMAA2Enum("jobState", JState)
-
-
 class JobSession:
     """The JobSession is the central class for running jobs.
     This Python class wraps a ctypes.Structure called

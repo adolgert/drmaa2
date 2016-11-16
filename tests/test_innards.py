@@ -7,8 +7,8 @@ LOGGER = logging.getLogger("test_innards")
 
 
 def test_compare_structure():
-    a = drmaa2.DRMAA2_JINFO()
-    b = drmaa2.DRMAA2_JINFO()
+    a = drmaa2.interface.DRMAA2_JINFO()
+    b = drmaa2.interface.DRMAA2_JINFO()
     assert a == b
     a.exitStatus = 1
     assert a != b
@@ -36,7 +36,7 @@ def test_list_action():
 def test_job_compare():
     logging.basicConfig(level=logging.DEBUG)
     a = drmaa2.Job("123", "hi")
-    b = drmaa2.DRMAA2_J()
+    b = drmaa2.interface.DRMAA2_J()
     b.id = b"123"
     b.sessionName = b"hi"
     # You have to compare the drmaa wrapper first b/c it has a compare

@@ -11,7 +11,9 @@ of the features.
 
 * Open Grid Forum document [GFD.194.pdf](https://www.ogf.org/ogf/doku.php/documents/documents)
 * [Daniel Gruber's blog](http://www.gridengine.eu/index.php/programming-apis/178-the-drmaa2-tutorial-introduction-1-2013-10-05)
-* On the cluster, man pages: man -M $SGE_ROOT/man drmaa2_open_jsession
+* On the cluster, man pages:
+
+    man -M $SGE_ROOT/man drmaa2_open_jsession
 
 ### Requirements
 

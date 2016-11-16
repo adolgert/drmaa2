@@ -228,7 +228,7 @@ def return_str(returned_from_drmaa2_call):
     LOGGER.debug("enter return_str")
     result = returned_from_drmaa2_call.value
     DRMAA_LIB.drmaa2_string_free(pointer(returned_from_drmaa2_call))
-    LOGGER.debug("leave return_str")
+    LOGGER.debug("leave return_str {}".format(result))
     if result:
         return result.decode()
     else:
@@ -484,15 +484,19 @@ drmaa2_r = c_void_p
 
 def load_drmaa_library():
     global DRMAA_LIB
-    if DRMAA_LIB: return DRMAA_LIB
+    if DRMAA_LIB:
+        LOGGER.debug("Already have a DRMAA_LIB. Return it.")
+        return DRMAA_LIB
     try:
         SGE_ROOT = Path(os.environ["SGE_ROOT"])
         drmaa2_name = SGE_ROOT / "lib/lx-amd64" / "libdrmaa2.so"
     except KeyError:
         drmaa2_name = "libdrmaa2.so"
+        LOGGER.debug("There is no SGE_ROOT. Try the bare filename.")
     try:
         DRMAA_LIB = ctypes.cdll.LoadLibrary(str(drmaa2_name))
-    except OSError as ose:
+    except OSError:
+        LOGGER.debug("Failed to load the library.")
         warnings.warn("Cannot open the DRMAA_LIB for DRMAA")
         return None
     LOGGER.debug("Initializing DRMAA2")
