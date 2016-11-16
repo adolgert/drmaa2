@@ -9,7 +9,16 @@ LOGGER = logging.getLogger("drmaa2")
 DRMAA_LIB = interface.load_drmaa_library()
 
 
+def drms_name():
+    if DRMAA_LIB:
+        return_str(DRMAA_LIB.drmaa2_get_drms_name())
+    else:
+        return None
+
+
 def drms_version():
+    if not DRMAA_LIB:
+        return None
     LOGGER.debug("enter drms_version")
     version_ptr = DRMAA_LIB.drmaa2_get_drms_version()
     version = version_ptr.contents
@@ -46,5 +55,5 @@ def unset_event_notification():
     CheckError(DRMAA_LIB.drmaa2_register_event_notification(DRMAA2_CALLBACK()))
 
 
-drmsName = return_str(DRMAA_LIB.drmaa2_get_drms_name())
+drmsName = drms_name()
 drmsVersion = drms_version()

@@ -178,6 +178,8 @@ class DRMAA2Bool:
         self.name = name
 
     def __get__(self, obj, type=None):
+        if not obj:
+            return False
         wrapped_value = getattr(obj._wrapped.contents, self.name)
         return Bool(wrapped_value)==Bool.true
 
@@ -194,6 +196,8 @@ class DRMAA2String:
         self.was_set = False
 
     def __get__(self, obj, type=None):
+        if not obj:  # Case of building docs.
+            return None
         if len(self.name) > 1:
             base = getattr(obj._wrapped.contents, self.name[0])
         else:
@@ -236,6 +240,8 @@ class DRMAA2StringList:
         self.allocated = None
 
     def __get__(self, obj, type=None):
+        if not obj:
+            return []
         wrapped_list = getattr(obj._wrapped.contents, self.name)
         if wrapped_list:
             string_list = list()
@@ -292,7 +298,8 @@ class DRMAA2Dict:
         self.name = name
 
     def __get__(self, obj, type=None):
-        wrapped = getattr(obj._wrapped.contents, self.name)
+        # Allow for obj=None in case of building docs.
+        wrapped = getattr(obj._wrapped.contents, self.name) if obj else None
         if wrapped:
             key_list = DRMAA_LIB.drmaa2_dict_list(wrapped)
             if key_list:
@@ -335,7 +342,7 @@ class DRMAA2LongLong:
         self.name = name
 
     def __get__(self, obj, type=None):
-        val = getattr(obj._wrapped.contents, self.name)
+        val = getattr(obj._wrapped.contents, self.name) if obj else UNSET_NUM
         if val == UNSET_NUM:
             return None
         else:
@@ -355,6 +362,8 @@ class DRMAA2Enum:
         self.enum_cls = enum_cls
 
     def __get__(self, obj, type=None):
+        if not obj:
+            return None
         name = self.enum_cls(getattr(obj._wrapped.contents, self.name)).name
         if name == "unset":
             return None
@@ -371,7 +380,8 @@ class DRMAA2Time:
         self.name = name
 
     def __get__(self, obj, type=None):
-        LOGGER.debug("enter get time {}".format(self.name))
+        if not obj:
+            return None
         when = getattr(obj._wrapped.contents, self.name)
         LOGGER.debug("time is {}".format(when))
         try:

@@ -16,6 +16,7 @@ from enum import Enum
 import os
 from pathlib import Path
 import logging
+import warnings
 
 
 LOGGER = logging.getLogger("drmaa2.interface")
@@ -484,12 +485,16 @@ drmaa2_r = c_void_p
 def load_drmaa_library():
     global DRMAA_LIB
     if DRMAA_LIB: return DRMAA_LIB
-    SGE_ROOT = Path(os.environ["SGE_ROOT"])
-    drmaa2_name = SGE_ROOT / "lib/lx-amd64" / "libdrmaa2.so"
+    try:
+        SGE_ROOT = Path(os.environ["SGE_ROOT"])
+        drmaa2_name = SGE_ROOT / "lib/lx-amd64" / "libdrmaa2.so"
+    except KeyError:
+        drmaa2_name = "libdrmaa2.so"
     try:
         DRMAA_LIB = ctypes.cdll.LoadLibrary(str(drmaa2_name))
     except OSError as ose:
-        raise Exception("Cannot open the DRMAA_LIB for DRMAA", ose)
+        warnings.warn("Cannot open the DRMAA_LIB for DRMAA")
+        return None
     LOGGER.debug("Initializing DRMAA2")
 
     # The argument type is a c_void_p which takes any pointer.
