@@ -16,13 +16,13 @@ LOGGER = logging.getLogger("drmaa2.wrapping")
 
 def print_string_list(wrapped_list):
     string_cnt = DRMAA_LIB.drmaa2_list_size(wrapped_list)
-    assert last_errno() < 1
+    assert last_errno() is Error.success
     ptrs = list()
     vals = list()
     for string_idx in range(string_cnt):
         void_p = DRMAA_LIB.drmaa2_list_get(wrapped_list, string_idx)
         ptrs.append(void_p)
-        assert last_errno() < 1
+        assert last_errno() is Error.success
         name = cast(void_p, drmaa2_string).value.decode()
         vals.append(name)
     print(", ".join(vals))
@@ -140,6 +140,28 @@ class DRMAA2List(Sequence):
                 return False
         return True
 
+    def remove_ptr(self, ptr):
+        """
+        A contains() method would search all entries. This asks
+        whether the pointer underlying any entry matches the ptr
+        value passed in.
+
+        :param ptr: A pointer to the native type, as a POINTER(type).
+        :returns bool: Whether it removed the pointer.
+        """
+        # Cast takes POINTER(Structure) to a c_void_p. Then .value gives int.
+        void_ptr = cast(ptr, c_void_p).value
+        entry_cnt = self.__len__()
+        for entry_idx in range(entry_cnt):
+            # This returns an integer b/c it's a c_void_p return value.
+            entry_ptr = DRMAA_LIB.drmaa2_list_get(self.list_ptr, entry_idx)
+            LOGGER.debug("remove_ptr {} {}".format(
+                type(entry_ptr), type(void_ptr)))
+            if entry_ptr == void_ptr:
+                CheckError(DRMAA_LIB.drmaa2_list_del(self.list_ptr, entry_idx))
+                return True
+        return False
+
     @staticmethod
     def return_list(string_ptr, list_type):
         l_ptr = DRMAA2List.from_existing(string_ptr, list_type)
@@ -155,7 +177,7 @@ def convert_string_list(string_list):
         check_errno()
         for string_idx in range(string_cnt):
             void_p = DRMAA_LIB.drmaa2_list_get(string_list, string_idx)
-            assert last_errno() < 1
+            assert last_errno() is Error.success
             name = cast(void_p, drmaa2_string).value.decode()
             LOGGER.debug("{} at index {}".format(name, string_idx))
             python_list.append(name)
@@ -170,12 +192,65 @@ def convert_and_free_string_list(string_list):
     return python_list
 
 
+def Extensible(impl_spec):
+    """
+    Some of the classes exposed by DRMAA2 have optional,
+    implementation-specific parameters, all of which have
+    string values. This class decorator adds those values
+    as string properties to the class.
+
+    :param impl_spec: DRMAA_LIB.drmaa2_jtemplate_impl_spec, or equivalent.
+                      There are a functions specific to each class.
+    :return:
+    """
+    def Extended(cls):
+        native_specific_list = impl_spec()
+        errno = last_errno()
+        if native_specific_list and errno == Error.success:
+            if errno != Error.success:
+                warnings.warn("error is {}".format(errno))
+            attributes = convert_and_free_string_list(native_specific_list)
+            for attr in attributes:
+                setattr(cls, attr, ExtensibleString(attr))
+        elif errno == Error.unsupported_operation:
+            pass  # This is OK if there is no implementation for this class.
+        else:
+            raise DRMAA2Exception(last_error())
+        return cls
+    return Extended
+
+
+def Wraps(structure_type):
+    """
+    This class decorator makes sure that attributes know what their
+    name is when they call DRMAA2. It also checks that all of the
+    properties of a class are wrapped.
+    """
+    assert issubclass(structure_type, ctypes.Structure)
+    def Wrapped(cls):
+        for name, field_type in structure_type._fields_:
+            if name in cls.__dict__:
+                attr = cls.__dict__[name]
+                if isinstance(attr, WrappedProperty):
+                    attr.name = name
+            elif name == "implementationSpecific":
+                if __name__ == '__main__':
+                    pass  # That's OK
+            else:
+                warnings.warn("Attribute {} not wrapped".format(name))
+        return cls
+    return Wrapped
+
+
+class WrappedProperty(object):
+    pass
+
 
 # This next series of classes are properties to deal with
 # modifying values written to and read from classes that
 # wrap DRMAA2 objects from C.
-class DRMAA2Bool:
-    def __init__(self, name):
+class DRMAA2Bool(WrappedProperty):
+    def __init__(self, name=None):
         self.name = name
 
     def __get__(self, obj, type=None):
@@ -188,50 +263,44 @@ class DRMAA2Bool:
         setattr(obj._wrapped.contents, self.name, 1 if value else 0)
 
 
-class DRMAA2String:
+class DRMAA2String(WrappedProperty):
     """A descriptor for wrapped strings on structs.
     There is no drmaa2_string_create, so we use ctypes' own allocation
     and freeing, which happens by default."""
-    def __init__(self, name):
-        self.name = name.split(".")
+    def __init__(self, name=None):
+        self.name = name
         self.was_set = False
 
     def __get__(self, obj, type=None):
         if not obj:  # Case of building docs.
             return None
-        if len(self.name) > 1:
-            base = getattr(obj._wrapped.contents, self.name[0])
-        else:
-            base = obj._wrapped.contents
-        wrapped_value = getattr(base, self.name[-1]).value
+        base = obj._wrapped.contents
+        wrapped_value = getattr(base, self.name).value
         if wrapped_value is None:  # Exclude case where it is "".
             return wrapped_value
         else:
             return wrapped_value.decode()
 
     def __set__(self, obj, value):
-        if len(self.name) > 1:
-            base = getattr(obj._wrapped.contents, self.name[0])
-        else:
-            base = obj._wrapped.contents
-        wrapped_value = getattr(base, self.name[-1])
+        base = obj._wrapped.contents
+        wrapped_value = getattr(base, self.name)
         if wrapped_value.value and not self.was_set:
             DRMAA_LIB.drmaa2_string_free(byref(wrapped_value))
         else:
             pass  # No need to free it if it's null.
         if value is not None:
-            setattr(base, self.name[-1],
+            setattr(base, self.name,
                     drmaa2_string(str(value).encode()))
             self.was_set = True
         else:
-            setattr(base, self.name[-1], UNSET_STRING)
+            setattr(base, self.name, UNSET_STRING)
 
     def free(self):
         pass
 
 
-class DRMAA2StringList:
-    def __init__(self, name, list_type):
+class DRMAA2StringList(WrappedProperty):
+    def __init__(self, list_type, name=None):
         """Name is the name of the member of the instance.
         list_type is the ListType enum for this list.
         If there isn't a list, we make one, so we free it, too."""
@@ -294,8 +363,8 @@ class DRMAA2StringList:
             DRMAA_LIB.drmaa2_list_free(byref(self.allocated))
 
 
-class DRMAA2Dict:
-    def __init__(self, name):
+class DRMAA2Dict(WrappedProperty):
+    def __init__(self, name=None):
         self.name = name
 
     def __get__(self, obj, type=None):
@@ -338,8 +407,8 @@ class DRMAA2Dict:
             CheckError(DRMAA_LIB.drmaa2_dict_set(wrapped, key, value))
 
 
-class DRMAA2LongLong:
-    def __init__(self, name):
+class DRMAA2LongLong(WrappedProperty):
+    def __init__(self, name=None):
         self.name = name
 
     def __get__(self, obj, type=None):
@@ -357,8 +426,8 @@ class DRMAA2LongLong:
         setattr(obj._wrapped.contents, self.name, value)
 
 
-class DRMAA2Enum:
-    def __init__(self, name, enum_cls):
+class DRMAA2Enum(WrappedProperty):
+    def __init__(self, enum_cls, name=None):
         self.name = name
         self.enum_cls = enum_cls
 
@@ -376,8 +445,8 @@ class DRMAA2Enum:
         setattr(obj._wrapped.contents, self.name, self.enum_cls[value].value)
 
 
-class DRMAA2Time:
-    def __init__(self, name):
+class DRMAA2Time(WrappedProperty):
+    def __init__(self, name=None):
         self.name = name
 
     def __get__(self, obj, type=None):
@@ -403,6 +472,41 @@ class DRMAA2Time:
         else:
             when = int(value.timestamp())
         setattr(obj._wrapped.contents, self.name, when)
+
+
+class ExtensibleString(WrappedProperty):
+    """A descriptor for wrapped strings on structs.
+    There is no drmaa2_string_create, so we use ctypes' own allocation
+    and freeing, which happens by default."""
+    def __init__(self, name=None):
+        self.name = name
+        self.was_set = False
+        # Cannot get documentation here because the DRMAA2 describe
+        # function can only get documentation from an instance of
+        # the object, and that doesn't exist yet.
+
+    def __get__(self, obj, type=None):
+        if not obj:  # Case of building docs.
+            return None
+        d_string = DRMAA_LIB.drmaa2_get_instance_value(
+            cast(obj._wrapped, c_void_p), self.name.encode()
+        )
+        # This can sometimes cast a spurious error that the value isn't
+        # specified, even though the value is just currently unset.
+        if last_errno() == Error.success:
+            return return_str(d_string)
+        else:
+            raise DRMAA2Exception(last_error())
+
+    def __set__(self, obj, value):
+        if value is None:
+            value = "".encode()
+        else:
+            value = value.encode()
+        DRMAA_LIB.drmaa2_set_instance_value(
+                cast(obj._wrapped, c_void_p),
+                self.name.encode(), value)
+        check_errno()
 
 
 class Notification:

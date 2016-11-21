@@ -52,3 +52,12 @@ def test_job_list():
     job_list = drmaa2.DRMAA2List(jobs, "joblist")
     assert len(jobs) == len(job_list)
     assert jobs[3] == job_list[3]
+
+
+def test_jinfo_memory():
+    drmaa2.session._jinfo_crash()
+
+
+def test_jinfo_object_memory():
+    ji = drmaa2.session.JobInfo()
+    ji.__del__()

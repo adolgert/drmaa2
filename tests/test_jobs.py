@@ -5,6 +5,7 @@ from pathlib import Path
 import sys
 import pytest
 import drmaa2
+from common import *
 
 
 LOGGER = logging.getLogger("test_jobs")
@@ -46,6 +47,7 @@ def test_notification():
         drmaa2.register_event_notification(Counter())
 
 
+@slow
 def test_submit_with_hold():
     logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
     # The error is that spaces aren't allowed.
@@ -70,6 +72,7 @@ def test_submit_with_hold():
                     print("Returned job is {}".format(jobs[-1]))
 
 
+@slow
 def test_submit_with_impl_spec():
     logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
     # The error is that spaces aren't allowed.
@@ -95,6 +98,7 @@ def test_submit_with_impl_spec():
 
 
 
+@slow
 def test_submit_with_pe():
     logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
     with drmaa2.JobSession() as js:
@@ -109,14 +113,15 @@ def test_submit_with_pe():
             assert job
 
 
+@slow
 def test_wait_terminated():
     logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
     with drmaa2.JobSession() as js:
         jt = drmaa2.JobTemplate()
         jt.remoteCommand = Path("/bin/sleep")
-        jt.args = ["30"]
+        jt.args = ["10"]
         jobs = list()
-        job_cnt = 2
+        job_cnt = 4
         for idx in range(job_cnt):
             LOGGER.debug("submitting job {} {}".format(idx, jt))
             jobs.append(js.run(jt))
@@ -126,11 +131,8 @@ def test_wait_terminated():
         returned = list()
         # This should remove completed jobs from the list every
         # time one is returned, as shown in src/hold.c.
-        for reap_idx in range(job_cnt):
-            job = None
-            while not job:
-                job = js.wait_any_terminated(job_list, 10)
-                LOGGER.debug("Returned from wait {}".format(job))
+        print("Jobs to wait for: {}".format(job_list))
+        for job in js.as_terminated(job_list):
             returned.append(job)
             LOGGER.debug("completed: {}".format(returned[-1]))
         assert returned[0] != returned[1]

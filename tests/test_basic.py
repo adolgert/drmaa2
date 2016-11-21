@@ -4,6 +4,7 @@ import logging
 import sys
 import pytest
 import drmaa2
+from common import *
 
 
 LOGGER = logging.getLogger("test_basic")
@@ -28,7 +29,7 @@ def test_anonymous_job_session():
     js.destroy()
 
 
-def test_session():
+def test_session_existing_stage():
     logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
     existing = drmaa2.JobSession.names()
     stage = "scalars"
@@ -43,7 +44,8 @@ def test_session():
 
     print(drmaa2.JobSession.names())
 
-    jdel = drmaa2.JobSession.from_existing(stage)
+    # Open the existing one this time.
+    jdel = drmaa2.JobSession(stage)
     jdel.close()
     jdel.__del__()
 
@@ -168,6 +170,7 @@ def test_job_template_time():
 
 def test_job_template_extensible():
     logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
+    drmaa2.errors.check_errno()
     jt = drmaa2.JobTemplate()
     assert jt.implementation_specific() == ["uge_jt_pe"]
     jt.uge_jt_pe = "slots=5"

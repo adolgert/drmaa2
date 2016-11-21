@@ -27,11 +27,15 @@ def last_errno():
 
     :return int: The error number which will match the Error enum.
     """
-    return DRMAA_LIB.drmaa2_lasterror()
+    error_idx = DRMAA_LIB.drmaa2_lasterror()
+    try:
+        return interface.Error(error_idx)
+    except ValueError:
+        return error_idx
 
 
 def check_errno():
-    if last_errno() > 0:
+    if last_errno() != interface.Error.success:
         raise DRMAA2Exception(last_error())
 
 
