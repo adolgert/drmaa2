@@ -124,6 +124,11 @@ class DRMAA2List(Sequence):
         """This isn't called when you call del but when garbage collection
         happens."""
         if self.list_ptr:
+            # Quoting the man pages: When the list is freed with list_free
+            # and a callback function was given then for each element
+            # in the list this function is called. When lists are
+            # returned as copies by DRMAA2 functions then appropriate
+            # destroy functions are set.
             DRMAA_LIB.drmaa2_list_free(byref(c_void_p(self.list_ptr)))
             self.list_ptr = None
 
