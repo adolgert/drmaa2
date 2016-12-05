@@ -7,3 +7,9 @@ hold: hold.c
 
 given: given.c
 	gcc -g -I$(SGE_ROOT)/include -L$(SGE_ROOT)/lib/lx-amd64 given.c -o given -ldrmaa2
+
+jinfo: jinfo.c
+	gcc -std=c99 -g -I$(SGE_ROOT)/include -L$(SGE_ROOT)/lib/lx-amd64 jinfo.c -o jinfo -ldrmaa2
+
+listfree: list_free.c
+	gcc -std=c99 -g -I$(SGE_ROOT)/include -L$(SGE_ROOT)/lib/lx-amd64 list_free.c -o listfree -ldrmaa2

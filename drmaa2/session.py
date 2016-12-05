@@ -20,11 +20,66 @@ LOGGER = logging.getLogger("drmaa2.session")
 DRMAA_LIB = load_drmaa_library()
 
 
-Job = collections.namedtuple("Job", "id sessionName")
-Job.__doc__ = """This is the class that represents jobs.
-It's enough so far."""
-Job.id.__doc__ = "Python string of SGE Job ID."
-Job.sessionName.__doc__ = "Python string of Job Session name."
+class Job(object):
+    def __init__(self, job_ptr):
+        self._wrapped = job_ptr
+
+    def suspend(self):
+        CheckError(DRMAA_LIB.drmaa2_j_suspend(self._wrapped))
+
+    def resume(self):
+        CheckError(DRMAA_LIB.drmaa2_j_resume(self._wrapped))
+
+    def release(self):
+        CheckError(DRMAA_LIB.drmaa2_j_release(self._wrapped))
+
+    def terminate(self):
+        CheckError(DRMAA_LIB.drmaa2_j_terminate(self._wrapped))
+
+    def reap(self):
+        CheckError(DRMAA_LIB.drmaa2_j_reap(self._wrapped))
+
+    @property
+    def id(self):
+        value = DRMAA_LIB.drmaa2_get_id(self._wrapped)
+        if not value:
+            check_errno()
+            return None
+        else:
+            return value.decode()
+
+    @property
+    def job_template(self):
+        value = DRMAA_LIB.drmaa2_get_jtemplate(self._wrapped)
+        if not value:
+            check_errno()
+            return None
+        else:
+            return JobTemplate(value)
+
+    @property
+    def state(self):
+        value = DRMAA_LIB.drmaa2_get_state(self._wrapped)
+        if value:
+            return JState(value.decode)
+        else:
+            check_errno()
+            return None
+
+    @property
+    def info(self):
+        value = DRMAA_LIB.drmaa2_j_get_info(self._wrapped)
+        if value:
+            return JobInfo(value)
+        else:
+            check_errno()
+            return None
+
+    def wait_started(self, how_long):
+        CheckError(DRMAA_LIB.drmaa2_wait_started(self._wrapped, how_long))
+
+    def wait_terminated(self):
+        CheckError(DRMAA_LIB.drmaa2_wait_started(self._wrapped))
 
 
 # The conversion strategy is defined in wrapping module.
@@ -366,11 +421,8 @@ class JobSession:
             check_errno()
             return None
 
-    @property
-    def jobs(self):
-        return self.jobs_matching()
-
-    def jobs_matching(self, job_info=None):
+    def jobs(self, job_info=None):
+        job_info = job_info or JobInfo()
         jobs_ptr = DRMAA_LIB.drmaa2_jsession_get_jobs(
             self._session, job_info._wrapped)
         if jobs_ptr:

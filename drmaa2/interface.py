@@ -453,28 +453,34 @@ class DRMAA2_MACHINEINFO(CompareStructure):
 DRMAA2_CALLBACK = CFUNCTYPE(None, POINTER(DRMAA2_NOTIFICATION))
 
 
-# UGE-specific
-class DRMAA2_J(CompareStructure):
-    _fields_ = [("id", drmaa2_string),
-                ("sessionName", drmaa2_string)]
+drmaa2_j = c_void_p
+drmaa2_jarray = c_void_p
+drmaa2_jsession = c_void_p
+drmaa2_msession = c_void_p
 
+# class DRMAA2_J(CompareStructure):
+#     """UGE-specific, so we wrap it without the fields."""
+#     _fields_ = [("id", drmaa2_string),
+#                 ("sessionName", drmaa2_string)]
+#
+#
+# # UGE-specific
+# class DRMAA2_JARRAY(CompareStructure):
+#     _fields_ = [("id", drmaa2_string),
+#                 ("jobList", drmaa2_j_list),
+#                 ("sessionName", drmaa2_string)]
+#
+#
+# # UGE-specific
+# class DRMAA2_JSESSION(CompareStructure):
+#     _fields_ = [("contact", drmaa2_string),
+#                 ("name", drmaa2_string)]
+#
+#
+# # UGE-specific
+# class DRMAA2_MSESSION(CompareStructure):
+#     _fields_ = [("name", drmaa2_string)]
 
-# UGE-specific
-class DRMAA2_JARRAY(CompareStructure):
-    _fields_ = [("id", drmaa2_string),
-                ("jobList", drmaa2_j_list),
-                ("sessionName", drmaa2_string)]
-
-
-# UGE-specific
-class DRMAA2_JSESSION(CompareStructure):
-    _fields_ = [("contact", drmaa2_string),
-                ("name", drmaa2_string)]
-
-
-# UGE-specific
-class DRMAA2_MSESSION(CompareStructure):
-    _fields_ = [("name", drmaa2_string)]
 
 
 # UGE-specific, and I can't find these definitions, so they will be opaque.
@@ -552,7 +558,7 @@ def load_drmaa_library():
     DRMAA_LIB.drmaa2_jinfo_create.restype = POINTER(DRMAA2_JINFO)
     DRMAA_LIB.drmaa2_jinfo_create.argtypes = []
     DRMAA_LIB.drmaa2_jinfo_free.restype = None
-    DRMAA_LIB.drmaa2_jinfo_free.argtypes = [POINTER(POINTER(DRMAA2_JINFO))]
+    DRMAA_LIB.drmaa2_jinfo_free.argtypes = [c_void_p]
 
     DRMAA_LIB.drmaa2_slotinfo_free.restype = None
     DRMAA_LIB.drmaa2_slotinfo_free.argtypes = [
@@ -614,20 +620,17 @@ def load_drmaa_library():
                                                     c_char_p, c_char_p]
 
     DRMAA_LIB.drmaa2_jsession_free.restype = None
-    DRMAA_LIB.drmaa2_jsession_free.argtypes = [
-        POINTER(POINTER(DRMAA2_JSESSION))]
+    DRMAA_LIB.drmaa2_jsession_free.argtypes = [c_void_p]
     DRMAA_LIB.drmaa2_rsession_free.restype = None
     DRMAA_LIB.drmaa2_rsession_free.argtypes = [
-        POINTER(POINTER(drmaa2_rsession))]
+        POINTER(drmaa2_rsession)]
     DRMAA_LIB.drmaa2_msession_free.restype = None
     DRMAA_LIB.drmaa2_msession_free.argtypes = [
-        POINTER(POINTER(DRMAA2_MSESSION))]
+        POINTER(drmaa2_msession)]
     DRMAA_LIB.drmaa2_j_free.restype = None
-    DRMAA_LIB.drmaa2_j_free.argtypes = [
-        POINTER(POINTER(DRMAA2_J))]
+    DRMAA_LIB.drmaa2_j_free.argtypes = [c_void_p]
     DRMAA_LIB.drmaa2_jarray_free.restype = None
-    DRMAA_LIB.drmaa2_jarray_free.argtypes = [
-        POINTER(POINTER(DRMAA2_JARRAY))]
+    DRMAA_LIB.drmaa2_jarray_free.argtypes = [c_void_p]
     # These are in the header drmaa2.h but not libdrmaa2.so.
     # DRMAA_LIB.drmaa2_r_free.restype = None
     # DRMAA_LIB.drmaa2_r_free.argtypes = [POINTER(drmaa2_r)]
@@ -661,87 +664,87 @@ def load_drmaa_library():
     DRMAA_LIB.drmaa2_r_terminate.argtypes = [drmaa2_r]
 
     DRMAA_LIB.drmaa2_jarray_get_id.restype = drmaa2_string
-    DRMAA_LIB.drmaa2_jarray_get_id.argtypes = [POINTER(DRMAA2_JARRAY)]
+    DRMAA_LIB.drmaa2_jarray_get_id.argtypes = [drmaa2_jarray]
     DRMAA_LIB.drmaa2_jarray_get_jobs.restype = drmaa2_j_list
-    DRMAA_LIB.drmaa2_jarray_get_jobs.argtypes = [POINTER(DRMAA2_JARRAY)]
+    DRMAA_LIB.drmaa2_jarray_get_jobs.argtypes = [drmaa2_jarray]
     DRMAA_LIB.drmaa2_jarray_get_session_name.restype = drmaa2_string
-    DRMAA_LIB.drmaa2_jarray_get_session_name.argtypes = [POINTER(DRMAA2_JARRAY)]
+    DRMAA_LIB.drmaa2_jarray_get_session_name.argtypes = [drmaa2_jarray]
     DRMAA_LIB.drmaa2_jarray_get_jtemplate.restype = POINTER(DRMAA2_JTEMPLATE)
-    DRMAA_LIB.drmaa2_jarray_get_jtemplate.argtypes = [POINTER(DRMAA2_JARRAY)]
+    DRMAA_LIB.drmaa2_jarray_get_jtemplate.argtypes = [drmaa2_jarray]
     DRMAA_LIB.drmaa2_jarray_suspend.restype = drmaa2_error
-    DRMAA_LIB.drmaa2_jarray_suspend.argtypes = [POINTER(DRMAA2_JARRAY)]
+    DRMAA_LIB.drmaa2_jarray_suspend.argtypes = [drmaa2_jarray]
     DRMAA_LIB.drmaa2_jarray_resume.restype = drmaa2_error
-    DRMAA_LIB.drmaa2_jarray_resume.argtypes = [POINTER(DRMAA2_JARRAY)]
+    DRMAA_LIB.drmaa2_jarray_resume.argtypes = [drmaa2_jarray]
     DRMAA_LIB.drmaa2_jarray_hold.restype = drmaa2_error
-    DRMAA_LIB.drmaa2_jarray_hold.argtypes = [POINTER(DRMAA2_JARRAY)]
+    DRMAA_LIB.drmaa2_jarray_hold.argtypes = [drmaa2_jarray]
     DRMAA_LIB.drmaa2_jarray_release.restype = drmaa2_error
-    DRMAA_LIB.drmaa2_jarray_release.argtypes = [POINTER(DRMAA2_JARRAY)]
+    DRMAA_LIB.drmaa2_jarray_release.argtypes = [drmaa2_jarray]
     DRMAA_LIB.drmaa2_jarray_terminate.restype = drmaa2_error
-    DRMAA_LIB.drmaa2_jarray_terminate.argtypes = [POINTER(DRMAA2_JARRAY)]
+    DRMAA_LIB.drmaa2_jarray_terminate.argtypes = [drmaa2_jarray]
 
     DRMAA_LIB.drmaa2_jsession_get_contact.restype = drmaa2_string
     DRMAA_LIB.drmaa2_jsession_get_contact.argtypes = [
-        POINTER(DRMAA2_JSESSION)]
+        drmaa2_jsession]
     DRMAA_LIB.drmaa2_jsession_get_session_name.restype = drmaa2_string
     DRMAA_LIB.drmaa2_jsession_get_session_name.argtypes = [
-        POINTER(DRMAA2_JSESSION)]
+        drmaa2_jsession]
     DRMAA_LIB.drmaa2_jsession_get_job_categories.restype = drmaa2_string_list
     DRMAA_LIB.drmaa2_jsession_get_job_categories.argtypes = [
-        POINTER(DRMAA2_JSESSION)]
+        drmaa2_jsession]
     DRMAA_LIB.drmaa2_jsession_get_jobs.restype = drmaa2_j_list
-    DRMAA_LIB.drmaa2_jsession_get_jobs.argtypes = [POINTER(DRMAA2_JSESSION),
+    DRMAA_LIB.drmaa2_jsession_get_jobs.argtypes = [drmaa2_jsession,
                                                    POINTER(DRMAA2_JINFO)]
-    DRMAA_LIB.drmaa2_jsession_get_job_array.restype = POINTER(DRMAA2_JARRAY)
+    DRMAA_LIB.drmaa2_jsession_get_job_array.restype = drmaa2_jarray
     DRMAA_LIB.drmaa2_jsession_get_job_array.argtypes = [
-        POINTER(DRMAA2_JSESSION), drmaa2_string]
-    DRMAA_LIB.drmaa2_jsession_run_job.restype = POINTER(DRMAA2_J)
-    DRMAA_LIB.drmaa2_jsession_run_job.argtypes = [POINTER(DRMAA2_JSESSION),
+        drmaa2_jsession, drmaa2_string]
+    DRMAA_LIB.drmaa2_jsession_run_job.restype = drmaa2_j
+    DRMAA_LIB.drmaa2_jsession_run_job.argtypes = [drmaa2_jsession,
                                                   POINTER(DRMAA2_JTEMPLATE)]
-    DRMAA_LIB.drmaa2_jsession_run_bulk_jobs.restype = POINTER(DRMAA2_JARRAY)
+    DRMAA_LIB.drmaa2_jsession_run_bulk_jobs.restype = drmaa2_jarray
     DRMAA_LIB.drmaa2_jsession_run_bulk_jobs.argtypes = [
-        POINTER(DRMAA2_JSESSION), POINTER(DRMAA2_JTEMPLATE),
+        drmaa2_jsession, POINTER(DRMAA2_JTEMPLATE),
         c_longlong, c_longlong, c_longlong, c_longlong]
-    DRMAA_LIB.drmaa2_jsession_wait_any_started.restype = POINTER(DRMAA2_J)
+    DRMAA_LIB.drmaa2_jsession_wait_any_started.restype = drmaa2_j
     DRMAA_LIB.drmaa2_jsession_wait_any_started.argtypes = [
-        POINTER(DRMAA2_JSESSION), drmaa2_j_list, drmaa2_time]
-    DRMAA_LIB.drmaa2_jsession_wait_any_terminated.restype = POINTER(DRMAA2_J)
+        drmaa2_jsession, drmaa2_j_list, drmaa2_time]
+    DRMAA_LIB.drmaa2_jsession_wait_any_terminated.restype = drmaa2_j
     DRMAA_LIB.drmaa2_jsession_wait_any_terminated.argtypes = [
-        POINTER(DRMAA2_JSESSION), drmaa2_j_list, drmaa2_time]
+        drmaa2_jsession, drmaa2_j_list, drmaa2_time]
     DRMAA_LIB.drmaa2_j_suspend.restype = drmaa2_error
-    DRMAA_LIB.drmaa2_j_suspend.argtypes = [POINTER(DRMAA2_J)]
+    DRMAA_LIB.drmaa2_j_suspend.argtypes = [drmaa2_j]
     DRMAA_LIB.drmaa2_j_resume.restype = drmaa2_error
-    DRMAA_LIB.drmaa2_j_resume.argtypes = [POINTER(DRMAA2_J)]
+    DRMAA_LIB.drmaa2_j_resume.argtypes = [drmaa2_j]
     DRMAA_LIB.drmaa2_j_release.restype = drmaa2_error
-    DRMAA_LIB.drmaa2_j_release.argtypes = [POINTER(DRMAA2_J)]
+    DRMAA_LIB.drmaa2_j_release.argtypes = [drmaa2_j]
     DRMAA_LIB.drmaa2_j_terminate.restype = drmaa2_error
-    DRMAA_LIB.drmaa2_j_terminate.argtypes = [POINTER(DRMAA2_J)]
+    DRMAA_LIB.drmaa2_j_terminate.argtypes = [drmaa2_j]
     DRMAA_LIB.drmaa2_j_reap.restype = drmaa2_error
-    DRMAA_LIB.drmaa2_j_reap.argtypes = [POINTER(DRMAA2_J)]
+    DRMAA_LIB.drmaa2_j_reap.argtypes = [drmaa2_j]
     DRMAA_LIB.drmaa2_j_get_id.restype = drmaa2_string
-    DRMAA_LIB.drmaa2_j_get_id.argtypes = [POINTER(DRMAA2_J)]
+    DRMAA_LIB.drmaa2_j_get_id.argtypes = [drmaa2_j]
     DRMAA_LIB.drmaa2_j_get_jtemplate.restype = POINTER(DRMAA2_JTEMPLATE)
-    DRMAA_LIB.drmaa2_j_get_jtemplate.argtypes = [POINTER(DRMAA2_J)]
+    DRMAA_LIB.drmaa2_j_get_jtemplate.argtypes = [drmaa2_j]
     DRMAA_LIB.drmaa2_j_get_state.restype = drmaa2_jstate
-    DRMAA_LIB.drmaa2_j_get_state.argtypes = [POINTER(DRMAA2_J)]
+    DRMAA_LIB.drmaa2_j_get_state.argtypes = [drmaa2_j]
     DRMAA_LIB.drmaa2_j_get_info.restype = POINTER(DRMAA2_JINFO)
-    DRMAA_LIB.drmaa2_j_get_info.argtypes = [POINTER(DRMAA2_J)]
+    DRMAA_LIB.drmaa2_j_get_info.argtypes = [drmaa2_j]
     DRMAA_LIB.drmaa2_j_wait_started.restype = drmaa2_error
-    DRMAA_LIB.drmaa2_j_wait_started.argtypes = [POINTER(DRMAA2_J), drmaa2_time]
+    DRMAA_LIB.drmaa2_j_wait_started.argtypes = [drmaa2_j, drmaa2_time]
     DRMAA_LIB.drmaa2_j_wait_terminated.restype = drmaa2_error
-    DRMAA_LIB.drmaa2_j_wait_terminated.argtypes = [POINTER(DRMAA2_J)]
+    DRMAA_LIB.drmaa2_j_wait_terminated.argtypes = [drmaa2_j]
 
     DRMAA_LIB.drmaa2_msession_get_all_reservations.restype = drmaa2_r_list
     DRMAA_LIB.drmaa2_msession_get_all_reservations.argtypes = [
-        POINTER(DRMAA2_MSESSION)]
+        drmaa2_msession]
     DRMAA_LIB.drmaa2_msession_get_all_jobs.restype = drmaa2_j_list
-    DRMAA_LIB.drmaa2_msession_get_all_jobs.argtypes = [POINTER(DRMAA2_MSESSION),
+    DRMAA_LIB.drmaa2_msession_get_all_jobs.argtypes = [drmaa2_msession,
                                                        POINTER(DRMAA2_JINFO)]
     DRMAA_LIB.drmaa2_msession_get_all_queues.restype = drmaa2_queueinfo_list
     DRMAA_LIB.drmaa2_msession_get_all_queues.argtypes = [
-        POINTER(DRMAA2_MSESSION), drmaa2_string_list]
+        drmaa2_msession, drmaa2_string_list]
     DRMAA_LIB.drmaa2_msession_get_all_machines.restype = drmaa2_machineinfo_list
     DRMAA_LIB.drmaa2_msession_get_all_machines.argtypes = [
-        POINTER(DRMAA2_MSESSION), drmaa2_string_list]
+        drmaa2_msession, drmaa2_string_list]
 
     DRMAA_LIB.drmaa2_get_drms_name.restype = drmaa2_string
     DRMAA_LIB.drmaa2_get_drms_name.argtypes = []
@@ -749,22 +752,22 @@ def load_drmaa_library():
     DRMAA_LIB.drmaa2_get_drms_version.argtypes = []
     DRMAA_LIB.drmaa2_supports.restype = drmaa2_bool
     DRMAA_LIB.drmaa2_supports.argtypes = [drmaa2_capability]
-    DRMAA_LIB.drmaa2_create_jsession.restype = POINTER(DRMAA2_JSESSION)
+    DRMAA_LIB.drmaa2_create_jsession.restype = drmaa2_jsession
     DRMAA_LIB.drmaa2_create_jsession.argtypes = [c_char_p, c_char_p]
     DRMAA_LIB.drmaa2_create_rsession.restype = drmaa2_rsession
     DRMAA_LIB.drmaa2_create_rsession.argtypes = [c_char_p, c_char_p]
-    DRMAA_LIB.drmaa2_open_jsession.restype = POINTER(DRMAA2_JSESSION)
+    DRMAA_LIB.drmaa2_open_jsession.restype = drmaa2_jsession
     DRMAA_LIB.drmaa2_open_jsession.argtypes = [c_char_p]
     DRMAA_LIB.drmaa2_open_rsession.restype = drmaa2_rsession
     DRMAA_LIB.drmaa2_open_rsession.argtypes = [c_char_p]
-    DRMAA_LIB.drmaa2_open_msession.restype = POINTER(DRMAA2_MSESSION)
+    DRMAA_LIB.drmaa2_open_msession.restype = drmaa2_msession
     DRMAA_LIB.drmaa2_open_msession.argtypes = [c_char_p]
     DRMAA_LIB.drmaa2_close_jsession.restype = drmaa2_error
-    DRMAA_LIB.drmaa2_close_jsession.argtypes = [POINTER(DRMAA2_JSESSION)]
+    DRMAA_LIB.drmaa2_close_jsession.argtypes = [drmaa2_jsession]
     DRMAA_LIB.drmaa2_close_rsession.restype = drmaa2_error
     DRMAA_LIB.drmaa2_close_rsession.argtypes = [drmaa2_rsession]
     DRMAA_LIB.drmaa2_close_msession.restype = drmaa2_error
-    DRMAA_LIB.drmaa2_close_msession.argtypes = [POINTER(DRMAA2_MSESSION)]
+    DRMAA_LIB.drmaa2_close_msession.argtypes = [drmaa2_msession]
     DRMAA_LIB.drmaa2_destroy_jsession.restype = drmaa2_error
     DRMAA_LIB.drmaa2_destroy_jsession.argtypes = [c_char_p]
     DRMAA_LIB.drmaa2_destroy_rsession.restype = drmaa2_error

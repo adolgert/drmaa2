@@ -239,8 +239,7 @@ def Wraps(structure_type):
                 if isinstance(attr, WrappedProperty):
                     attr.name = name
             elif name == "implementationSpecific":
-                if __name__ == '__main__':
-                    pass  # That's OK
+                pass  # That's OK
             else:
                 warnings.warn("Attribute {} not wrapped".format(name))
         return cls
@@ -300,8 +299,9 @@ class DRMAA2String(WrappedProperty):
         else:
             setattr(base, self.name, UNSET_STRING)
 
-    def free(self):
-        pass
+    def __delete__(self, obj):
+        if self.was_set:
+            setattr(obj._wrapped.contents, self.name, UNSET_STRING)
 
 
 class DRMAA2StringList(WrappedProperty):
@@ -362,10 +362,10 @@ class DRMAA2StringList(WrappedProperty):
                 CheckError(DRMAA_LIB.drmaa2_list_add(
                     wrapped, self.value[idx]))
 
-
-    def free(self):
+    def __delete__(self, obj):
         if self.allocated:
             DRMAA_LIB.drmaa2_list_free(byref(self.allocated))
+            setattr(obj._wrapped.contents, self.name, UNSET_LIST)
 
 
 class DRMAA2Dict(WrappedProperty):
